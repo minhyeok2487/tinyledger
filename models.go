@@ -1,0 +1,124 @@
+package main
+
+type Account struct {
+	ID      int64
+	Name    string
+	Icon    string
+	Balance int64
+}
+
+type Transaction struct {
+	ID          int64
+	AccountID   int64
+	AccountName string
+	Date        string
+	Type        string // income | expense
+	Category    string
+	Amount      int64
+	Memo        string
+}
+
+type Template struct {
+	ID          int64
+	AccountID   int64
+	AccountName string
+	AccountIcon string
+	Type        string
+	Category    string
+	Amount      int64
+	Memo        string
+}
+
+type CategorySum struct {
+	Category string
+	Icon     string
+	Spent    int64
+	Budget   int64
+	Percent  float64 // of total expense
+	BPercent float64 // of budget, capped 100
+	Over     bool
+}
+
+type DashboardData struct {
+	Month        string
+	PrevMonth    string
+	NextMonth    string
+	IsCurrent    bool
+	Accounts     []Account
+	AccountID    int64
+	TotalBalance int64
+	Income       int64
+	Expense      int64
+	Balance      int64
+	Categories   []CategorySum
+	Transactions []Transaction
+	Templates    []Template
+	ExpenseCats  []string
+	IncomeCats   []string
+	Nav          string
+	Note         string
+}
+
+type CalendarDay struct {
+	Day     int
+	Date    string
+	InMonth bool
+	Income  int64
+	Expense int64
+	Today   bool
+}
+
+type CalendarData struct {
+	Month     string
+	PrevMonth string
+	NextMonth string
+	Weeks     [][]CalendarDay
+	Accounts  []Account
+	AccountID int64
+	Nav       string
+}
+
+type SearchData struct {
+	Keyword      string
+	Category     string
+	AccountID    int64
+	Type         string
+	DateFrom     string
+	DateTo       string
+	Accounts     []Account
+	ExpenseCats  []string
+	IncomeCats   []string
+	Transactions []Transaction
+	Total        int64
+	Count        int
+	Nav          string
+}
+
+type BudgetRow struct {
+	Category string
+	Icon     string
+	Amount   int64
+}
+
+type BudgetData struct {
+	Month       string
+	PrevMonth   string
+	NextMonth   string
+	Rows        []BudgetRow
+	ExpenseCats []string
+	Nav         string
+}
+
+type TemplatesData struct {
+	Items       []Template
+	Accounts    []Account
+	ExpenseCats []string
+	IncomeCats  []string
+	Nav         string
+}
+
+type AccountsData struct {
+	Accounts []Account
+	Balances map[int64]int64
+	Nav      string
+}

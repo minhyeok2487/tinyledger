@@ -1,0 +1,15 @@
+{{define "nav"}}
+<nav class="tabbar">
+  <a href="/" class="{{if eq .Nav "dashboard"}}active{{end}}"><span>🏠</span>홈</a>
+  <a href="/calendar" class="{{if eq .Nav "calendar"}}active{{end}}"><span>📅</span>캘린더</a>
+  <a href="/search" class="{{if eq .Nav "search"}}active{{end}}"><span>🔍</span>검색</a>
+  <a href="/templates" class="{{if eq .Nav "templates"}}active{{end}}"><span>⭐</span>즐겨찾기</a>
+  <a href="/accounts" class="{{if eq .Nav "accounts"}}active{{end}}"><span>👛</span>계좌</a>
+</nav>
+{{end}}
+
+{{define "head"}}
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/static/style.css">
+{{end}}

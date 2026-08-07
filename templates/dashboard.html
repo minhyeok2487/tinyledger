@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ko">
+<head>
+{{template "head" .}}
+<title>가계부 · 홈</title>
+</head>
+<body class="page-dashboard">
+<div class="wrap">
+
+  <header class="topbar">
+    <a class="nav-arrow" href="/?month={{.PrevMonth}}{{if .AccountID}}&account={{.AccountID}}{{end}}">‹</a>
+    <h1>{{.Month}}{{if .IsCurrent}}<span class="tag">이번 달</span>{{end}}</h1>
+    <a class="nav-arrow" href="/?month={{.NextMonth}}{{if .AccountID}}&account={{.AccountID}}{{end}}">›</a>
+  </header>
+
+  <section class="real-balance">
+    <div class="rb-total">
+      <span class="rb-total-label">총 잔액</span>
+      <span class="rb-total-amount">{{comma .TotalBalance}}</span>
+    </div>
+    {{range .Accounts}}
+    <div class="rb-acc">
+      <span class="rb-icon">{{.Icon}}</span>
+      <span class="rb-name">{{.Name}}</span>
+      <span class="rb-amt">{{comma .Balance}}</span>
+    </div>
+    {{end}}
+  </section>
+
+  <section class="note-card" id="note-card">
+    <button type="button" class="note-header" onclick="toggleNote()">
+      <span class="note-icon">📌</span>
+      <span class="note-label">메모</span>
+      <span class="note-preview">{{if .Note}}{{notePreview .Note}}{{else}}탭해서 추가{{end}}</span>
+      <span class="note-toggle" id="note-toggle">＋</span>
+    </button>
+
+    <div class="note-view" id="note-view">
+      {{if .Note}}
+      <ul class="note-list">
+        {{range lines .Note}}<li>{{.}}</li>{{end}}
+      </ul>
+      {{else}}
+      <div class="note-empty">아직 메모가 없습니다.</div>
+      {{end}}
+      <button type="button" class="note-edit-btn" onclick="toggleNoteEdit()">✎ 수정</button>
+    </div>
+
+    <form method="post" action="/notes" class="note-body" id="note-body">
+      <input type="hidden" name="month" value="{{.Month}}">
+      <textarea name="content" class="note-textarea" placeholder="한 줄에 한 항목씩 적어주세요&#10;예: 월급의 64%는 주식 적립&#10;개인 고정비는 개인통장에서" rows="6" spellcheck="false" autocomplete="off">{{.Note}}</textarea>
+      <button type="submit" class="note-save">저장</button>
+    </form>
+  </section>
+
+  {{if gt (len .Accounts) 1}}
+  <div class="account-pills">
+    <a href="/?month={{.Month}}" class="pill {{if eq .AccountID 0}}active{{end}}">전체</a>
+    {{range .Accounts}}
+    <a href="/?month={{$.Month}}&account={{.ID}}" class="pill {{if eq $.AccountID .ID}}active{{end}}">{{.Icon}} {{.Name}}</a>
+    {{end}}
+  </div>
+  {{end}}
+
+  <section class="summary">
+    <div class="card income">
+      <div class="label">수입</div>
+      <div class="amount">{{comma .Income}}</div>
+    </div>
+    <div class="card expense">
+      <div class="label">지출</div>
+      <div class="amount">{{comma .Expense}}</div>
+    </div>
+    <div class="card balance">
+      <div class="label">잔액</div>
+      <div class="amount">{{comma .Balance}}</div>
+    </div>
+  </section>
+
+  <div class="dash-grid">
+
+    {{if .Categories}}
+    <section class="panel cats-panel">
+      <div class="panel-title">카테고리별 지출</div>
+      {{range .Categories}}
+      <div class="cat-row">
+        <span class="cat-icon">{{.Icon}}</span>
+        <div class="cat-mid">
+          <div class="cat-top">
+            <span class="cat-name">{{.Category}}</span>
+            <span class="cat-amount {{if .Over}}over{{end}}">{{comma .Spent}}{{if .Budget}} / {{comma .Budget}}{{end}}</span>
+          </div>
+          <div class="cat-bar-bg">
+            {{if .Budget}}
+            <div class="cat-bar {{if .Over}}over{{end}}" style="width:{{.BPercent}}%"></div>
+            {{else}}
+            <div class="cat-bar" style="width:{{.Percent}}%"></div>
+            {{end}}
+          </div>
+        </div>
+      </div>
+      {{end}}
+    </section>
+    {{end}}
+
+    <section class="panel add-panel">
+      <div class="panel-title">내역 추가</div>
+
+      {{if .Templates}}
+      <div class="fav-chips">
+        {{range .Templates}}
+        <button type="button" class="fav-chip" data-type="{{.Type}}" data-category="{{.Category}}" data-amount="{{.Amount}}" data-memo="{{.Memo}}" data-account="{{.AccountID}}" onclick="applyFav(this)">
+          {{icon .Category}} {{.Category}}{{if .Memo}} · {{.Memo}}{{end}} <span class="fav-amt">{{comma .Amount}}</span>
+        </button>
+        {{end}}
+      </div>
+      {{end}}
+
+      <form method="post" action="/add">
+        <input type="hidden" name="account_id" value="{{if .AccountID}}{{.AccountID}}{{else}}1{{end}}" id="add-account-id">
+        <div class="row">
+          <input type="date" name="date" required value="{{.Month}}-01">
+          <select name="type" class="type-select" onchange="updateCategoryOptions(this)">
+            <option value="expense">지출</option>
+            <option value="income">수입</option>
+          </select>
+        </div>
+        <div class="row">
+          <select name="category" class="category-select">
+            {{range .ExpenseCats}}<option value="{{.}}">{{icon .}} {{.}}</option>{{end}}
+          </select>
+          <input type="number" name="amount" id="add-amount" placeholder="금액" min="1" required>
+        </div>
+        <div class="row">
+          <input type="text" name="memo" id="add-memo" placeholder="메모 (선택)">
+        </div>
+        <div class="row save-fav-row">
+          <label class="checkbox-label"><input type="checkbox" name="save_template"> ⭐ 즐겨찾기에 저장</label>
+          <button type="submit" class="btn-primary">추가</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="tx-list">
+      {{range .Transactions}}
+      <div class="tx {{.Type}}">
+        <span class="tx-icon">{{icon .Category}}</span>
+        <div class="tx-mid">
+          <span class="tx-cat">{{.Category}}{{if .Memo}} · {{.Memo}}{{end}}</span>
+          <span class="tx-date">{{.Date}}{{if gt (len $.Accounts) 1}} · {{.AccountName}}{{end}}</span>
+        </div>
+        <span class="tx-amount">{{if eq .Type "expense"}}-{{else}}+{{end}}{{comma .Amount}}</span>
+        <form method="post" action="/delete/{{.ID}}?redirect=/%3Fmonth%3D{{$.Month}}" class="tx-del">
+          <button type="submit" title="삭제">×</button>
+        </form>
+      </div>
+      {{else}}
+      <div class="empty">이번 달 내역이 없습니다.</div>
+      {{end}}
+    </section>
+
+  </div>
+</div>
+
+<script>
+function toggleNote() {
+  const card = document.getElementById('note-card');
+  const expanded = card.classList.toggle('expanded');
+  document.getElementById('note-toggle').textContent = expanded ? '−' : '＋';
+  if (!expanded) card.classList.remove('editing');
+  localStorage.setItem('noteExpanded', expanded ? '1' : '0');
+}
+function toggleNoteEdit() {
+  document.getElementById('note-card').classList.toggle('editing');
+}
+(function initNoteState() {
+  const stored = localStorage.getItem('noteExpanded');
+  const shouldExpand = stored === null ? true : stored === '1';
+  if (shouldExpand) {
+    document.getElementById('note-card').classList.add('expanded');
+    document.getElementById('note-toggle').textContent = '−';
+  }
+})();
+const expenseCats = {{.ExpenseCats}};
+const incomeCats = {{.IncomeCats}};
+function updateCategoryOptions(sel) {
+  const form = sel.closest('form');
+  const type = sel.value;
+  const catSel = form.querySelector('.category-select');
+  const cats = type === 'income' ? incomeCats : expenseCats;
+  catSel.innerHTML = '';
+  cats.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c; opt.textContent = c;
+    catSel.appendChild(opt);
+  });
+}
+function applyFav(btn) {
+  const form = btn.closest('.add-panel').querySelector('form');
+  const typeSel = form.querySelector('.type-select');
+  typeSel.value = btn.dataset.type;
+  updateCategoryOptions(typeSel);
+  form.querySelector('.category-select').value = btn.dataset.category;
+  document.getElementById('add-amount').value = btn.dataset.amount;
+  document.getElementById('add-memo').value = btn.dataset.memo;
+  document.getElementById('add-account-id').value = btn.dataset.account;
+}
+</script>
+{{template "nav" .}}
+</body>
+</html>

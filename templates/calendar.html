@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ko">
+<head>
+{{template "head" .}}
+<title>가계부 · 캘린더</title>
+</head>
+<body class="page-calendar">
+<div class="wrap">
+
+  <header class="topbar">
+    <a class="nav-arrow" href="/calendar?month={{.PrevMonth}}{{if .AccountID}}&account={{.AccountID}}{{end}}">‹</a>
+    <h1>{{.Month}}</h1>
+    <a class="nav-arrow" href="/calendar?month={{.NextMonth}}{{if .AccountID}}&account={{.AccountID}}{{end}}">›</a>
+  </header>
+
+  {{if gt (len .Accounts) 1}}
+  <div class="account-pills">
+    <a href="/calendar?month={{.Month}}" class="pill {{if eq .AccountID 0}}active{{end}}">전체</a>
+    {{range .Accounts}}
+    <a href="/calendar?month={{$.Month}}&account={{.ID}}" class="pill {{if eq $.AccountID .ID}}active{{end}}">{{.Icon}} {{.Name}}</a>
+    {{end}}
+  </div>
+  {{end}}
+
+  <section class="panel calendar">
+    <div class="cal-dow">
+      <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+    </div>
+    {{range .Weeks}}
+    <div class="cal-week">
+      {{range .}}
+      <a href="/search?from={{.Date}}&to={{.Date}}" class="cal-day {{if not .InMonth}}out{{end}} {{if .Today}}today{{end}}">
+        <span class="cal-daynum">{{.Day}}</span>
+        {{if .Expense}}<span class="cal-expense">-{{comma .Expense}}</span>{{end}}
+        {{if .Income}}<span class="cal-income">+{{comma .Income}}</span>{{end}}
+      </a>
+      {{end}}
+    </div>
+    {{end}}
+  </section>
+
+</div>
+{{template "nav" .}}
+</body>
+</html>

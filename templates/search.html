@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ko">
+<head>
+{{template "head" .}}
+<title>가계부 · 검색</title>
+</head>
+<body class="page-search">
+<div class="wrap">
+
+  <header class="topbar single">
+    <h1>검색</h1>
+  </header>
+
+  <section class="panel">
+    <form method="get" action="/search" class="search-form">
+      <input type="text" name="keyword" placeholder="메모/카테고리 검색" value="{{.Keyword}}">
+      <div class="row">
+        <input type="date" name="from" value="{{.DateFrom}}">
+        <input type="date" name="to" value="{{.DateTo}}">
+      </div>
+      <div class="row">
+        <select name="type">
+          <option value="">전체</option>
+          <option value="expense" {{if eq .Type "expense"}}selected{{end}}>지출</option>
+          <option value="income" {{if eq .Type "income"}}selected{{end}}>수입</option>
+        </select>
+        <select name="category">
+          <option value="">전체 카테고리</option>
+          {{range .ExpenseCats}}<option value="{{.}}" {{if eq $.Category .}}selected{{end}}>{{icon .}} {{.}}</option>{{end}}
+          {{range .IncomeCats}}<option value="{{.}}" {{if eq $.Category .}}selected{{end}}>{{icon .}} {{.}}</option>{{end}}
+        </select>
+        {{if gt (len .Accounts) 1}}
+        <select name="account">
+          <option value="">전체 계좌</option>
+          {{range .Accounts}}<option value="{{.ID}}" {{if eq $.AccountID .ID}}selected{{end}}>{{.Icon}} {{.Name}}</option>{{end}}
+        </select>
+        {{end}}
+      </div>
+      <button type="submit" class="btn-primary full">검색</button>
+    </form>
+  </section>
+
+  <section class="panel result-summary">
+    <span>{{.Count}}건</span>
+    <span class="{{if lt .Total 0}}neg{{else}}pos{{end}}">{{comma .Total}}</span>
+  </section>
+
+  <section class="tx-list">
+    {{range .Transactions}}
+    <div class="tx {{.Type}}">
+      <span class="tx-icon">{{icon .Category}}</span>
+      <div class="tx-mid">
+        <span class="tx-cat">{{.Category}}{{if .Memo}} · {{.Memo}}{{end}}</span>
+        <span class="tx-date">{{.Date}} · {{.AccountName}}</span>
+      </div>
+      <span class="tx-amount">{{if eq .Type "expense"}}-{{else}}+{{end}}{{comma .Amount}}</span>
+      <form method="post" action="/delete/{{.ID}}?redirect=/search" class="tx-del">
+        <button type="submit" title="삭제">×</button>
+      </form>
+    </div>
+    {{else}}
+    <div class="empty">검색 결과가 없습니다.</div>
+    {{end}}
+  </section>
+
+</div>
+{{template "nav" .}}
+</body>
+</html>

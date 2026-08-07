@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ko">
+<head>
+{{template "head" .}}
+<title>가계부 · 계좌</title>
+</head>
+<body class="page-accounts">
+<div class="wrap">
+
+  <header class="topbar single">
+    <h1>계좌</h1>
+  </header>
+
+  <section class="tx-list accounts-list">
+    {{range .Accounts}}
+    <div class="tx account-row">
+      <form method="post" action="/accounts/update/{{.ID}}" class="account-edit-form">
+        <input type="text" name="icon" class="acc-icon-input" maxlength="2" value="{{.Icon}}">
+        <input type="text" name="name" class="acc-name-input" value="{{.Name}}" required>
+        <input type="number" name="balance" class="acc-balance-input" value="{{.Balance}}" placeholder="실제 잔액">
+        <button type="submit" class="acc-save" title="저장">저장</button>
+      </form>
+      {{if gt (len $.Accounts) 1}}
+      <form method="post" action="/accounts/delete/{{.ID}}" class="tx-del" onsubmit="return confirm('{{.Name}} 계좌를 삭제할까요? 거래 내역은 다른 계좌로 이동됩니다.')">
+        <button type="submit" title="삭제">×</button>
+      </form>
+      {{end}}
+    </div>
+    <div class="acc-calc-note">거래 내역 기준 이번 계좌 순증감: {{comma (index $.Balances .ID)}}</div>
+    {{end}}
+  </section>
+
+  {{if gt (len .Accounts) 1}}
+  <section class="panel">
+    <div class="panel-title">계좌간 이체</div>
+    <form method="post" action="/accounts/transfer">
+      <div class="row">
+        <select name="from_id">
+          {{range .Accounts}}<option value="{{.ID}}">{{.Icon}} {{.Name}}</option>{{end}}
+        </select>
+        <span class="transfer-arrow">→</span>
+        <select name="to_id">
+          {{range .Accounts}}<option value="{{.ID}}">{{.Icon}} {{.Name}}</option>{{end}}
+        </select>
+      </div>
+      <div class="row">
+        <input type="number" name="amount" placeholder="이체 금액" min="1" required>
+        <button type="submit" class="btn-primary">이체</button>
+      </div>
+    </form>
+  </section>
+  {{end}}
+
+  <section class="panel">
+    <div class="panel-title">계좌 추가</div>
+    <form method="post" action="/accounts/add">
+      <div class="row">
+        <input type="text" name="icon" placeholder="아이콘" maxlength="2" style="flex:0 0 60px" value="💳">
+        <input type="text" name="name" placeholder="계좌 이름 (예: 신한카드)" required>
+        <input type="number" name="balance" placeholder="현재 잔액">
+        <button type="submit" class="btn-primary">추가</button>
+      </div>
+    </form>
+  </section>
+
+</div>
+{{template "nav" .}}
+</body>
+</html>

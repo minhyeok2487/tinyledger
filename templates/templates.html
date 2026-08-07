@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<head>
+{{template "head" .}}
+<title>가계부 · 즐겨찾기</title>
+</head>
+<body class="page-templates">
+<div class="wrap">
+
+  <header class="topbar single">
+    <h1>즐겨찾기 항목</h1>
+  </header>
+
+  <section class="panel">
+    <div class="panel-title">새 즐겨찾기</div>
+    <form method="post" action="/templates/add">
+      <div class="row">
+        <select name="type" class="type-select" onchange="updateCategoryOptions(this)">
+          <option value="expense">지출</option>
+          <option value="income">수입</option>
+        </select>
+        <select name="category" class="category-select">
+          {{range .ExpenseCats}}<option value="{{.}}">{{icon .}} {{.}}</option>{{end}}
+        </select>
+      </div>
+      <div class="row">
+        <input type="number" name="amount" placeholder="금액" min="1" required>
+        <input type="text" name="memo" placeholder="메모 (선택)">
+      </div>
+      <div class="row">
+        {{if gt (len .Accounts) 1}}
+        <select name="account_id">
+          {{range .Accounts}}<option value="{{.ID}}">{{.Icon}} {{.Name}}</option>{{end}}
+        </select>
+        {{end}}
+        <button type="submit" class="btn-primary">추가</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="tx-list">
+    {{range .Items}}
+    <div class="tx {{.Type}}">
+      <span class="tx-icon">{{icon .Category}}</span>
+      <div class="tx-mid">
+        <span class="tx-cat">{{.Category}}{{if .Memo}} · {{.Memo}}{{end}}</span>
+        <span class="tx-date">{{if gt (len $.Accounts) 1}}{{.AccountName}}{{end}}</span>
+      </div>
+      <span class="tx-amount">{{if eq .Type "expense"}}-{{else}}+{{end}}{{comma .Amount}}</span>
+      <form method="post" action="/templates/delete/{{.ID}}" class="tx-del">
+        <button type="submit" title="삭제">×</button>
+      </form>
+    </div>
+    {{else}}
+    <div class="empty">등록된 즐겨찾기가 없습니다. 홈 화면 내역 추가 폼에서 자주 쓰는 항목을 저장해보세요.</div>
+    {{end}}
+  </section>
+
+</div>
+<script>
+const expenseCats = {{.ExpenseCats}};
+const incomeCats = {{.IncomeCats}};
+function updateCategoryOptions(sel) {
+  const form = sel.closest('form');
+  const type = sel.value;
+  const catSel = form.querySelector('.category-select');
+  const cats = type === 'income' ? incomeCats : expenseCats;
+  catSel.innerHTML = '';
+  cats.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c; opt.textContent = c;
+    catSel.appendChild(opt);
+  });
+}
+</script>
+{{template "nav" .}}
+</body>
+</html>

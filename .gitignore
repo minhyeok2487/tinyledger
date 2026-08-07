@@ -1,0 +1,7 @@
+gagyebu.exe
+gagyebu.db
+gagyebu.db-*
+gagyebu_dump*.sql
+.env
+.env.*
+8월 캡쳐/
