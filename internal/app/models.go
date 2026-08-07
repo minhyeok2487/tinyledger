@@ -1,4 +1,4 @@
-package main
+package app
 
 type Account struct {
 	ID      int64
