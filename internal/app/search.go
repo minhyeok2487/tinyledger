@@ -65,6 +65,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	accounts, _ := listAccounts()
 	data := SearchData{
 		Keyword:      keyword,
 		Category:     category,
@@ -72,7 +73,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 		DateFrom:     dateFrom,
 		DateTo:       dateTo,
 		AccountID:    accountID,
-		Accounts:     listAccounts(),
+		Accounts:     accounts,
 		ExpenseCats:  expenseCategories,
 		IncomeCats:   incomeCategories,
 		Transactions: txs,

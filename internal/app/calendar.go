@@ -7,10 +7,7 @@ import (
 )
 
 func handleCalendar(w http.ResponseWriter, r *http.Request) {
-	month := r.URL.Query().Get("month")
-	if month == "" {
-		month = currentMonth()
-	}
+	month := normalizeMonth(r.URL.Query().Get("month"))
 	accountID := int64(0)
 	if v := r.URL.Query().Get("account"); v != "" {
 		accountID, _ = strconv.ParseInt(v, 10, 64)
@@ -75,12 +72,13 @@ func handleCalendar(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	accounts, _ := listAccounts()
 	data := CalendarData{
 		Month:     month,
 		PrevMonth: shiftMonth(month, -1),
 		NextMonth: shiftMonth(month, 1),
 		Weeks:     weeks,
-		Accounts:  listAccounts(),
+		Accounts:  accounts,
 		AccountID: accountID,
 		Nav:       "calendar",
 	}

@@ -58,7 +58,7 @@ type DashboardData struct {
 	AvailableBalance int64
 	UpcomingFixed    int64
 	Spendable        int64
-	HasExcluded      bool
+	AllExcluded      bool
 	Categories   []CategorySum
 	Transactions []Transaction
 	Templates    []Template

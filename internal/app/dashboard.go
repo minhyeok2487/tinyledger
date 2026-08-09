@@ -9,16 +9,17 @@ import (
 )
 
 func handleDashboard(w http.ResponseWriter, r *http.Request) {
-	month := r.URL.Query().Get("month")
-	if month == "" {
-		month = currentMonth()
-	}
+	month := normalizeMonth(r.URL.Query().Get("month"))
 	accountID := int64(0)
 	if v := r.URL.Query().Get("account"); v != "" {
 		accountID, _ = strconv.ParseInt(v, 10, 64)
 	}
 
-	data := buildDashboard(month, accountID)
+	data, err := buildDashboard(month, accountID)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 	data.Nav = "dashboard"
 
 	if err := tpl.ExecuteTemplate(w, "dashboard.html", data); err != nil {
@@ -32,14 +33,11 @@ func handleNoteSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	saveNote(r.FormValue("content"))
-	month := r.FormValue("month")
-	if month == "" {
-		month = currentMonth()
-	}
+	month := normalizeMonth(r.FormValue("month"))
 	http.Redirect(w, r, "/?month="+month, http.StatusSeeOther)
 }
 
-func buildDashboard(month string, accountID int64) DashboardData {
+func buildDashboard(month string, accountID int64) (DashboardData, error) {
 	prev := shiftMonth(month, -1)
 	next := shiftMonth(month, 1)
 
@@ -49,6 +47,7 @@ func buildDashboard(month string, accountID int64) DashboardData {
 	// is read until wg.Wait() returns, so no locking is needed.
 	var (
 		wg       sync.WaitGroup
+		errs     [5]error
 		budgets  map[string]int64
 		txs      []Transaction
 		accounts []Account
@@ -60,29 +59,37 @@ func buildDashboard(month string, accountID int64) DashboardData {
 	wg.Add(6)
 	go func() {
 		defer wg.Done()
-		budgets = monthBudgets(month)
+		budgets, errs[0] = monthBudgets(month)
 	}()
 	go func() {
 		defer wg.Done()
-		txs = monthTransactions(month, accountID)
+		txs, errs[1] = monthTransactions(month, accountID)
 	}()
 	go func() {
 		defer wg.Done()
-		accounts = listAccounts()
+		accounts, errs[2] = listAccounts()
 	}()
 	go func() {
 		defer wg.Done()
-		allTpl = listTemplates()
+		allTpl, errs[3] = listTemplates()
 	}()
 	go func() {
 		defer wg.Done()
-		spent = spentTemplateKeys(month)
+		spent, errs[4] = spentTemplateKeys(month)
 	}()
 	go func() {
 		defer wg.Done()
-		note = getNote()
+		note = getNote() // absent note is normal, not an error
 	}()
 	wg.Wait()
+
+	// A failed query would otherwise render as a plausible-looking zero —
+	// a 총 잔액 of 0 and a large negative 쓸 수 있는 돈. Fail loudly instead.
+	for _, err := range errs {
+		if err != nil {
+			return DashboardData{}, err
+		}
+	}
 
 	var income, expense int64
 	catTotals := map[string]int64{}
@@ -130,12 +137,11 @@ func buildDashboard(month string, accountID int64) DashboardData {
 	}
 
 	var totalBalance, availableBalance, selectedBalance int64
-	hasExcluded := false
+	included := 0
 	for _, a := range accounts {
 		totalBalance += a.Balance
-		if a.Excluded {
-			hasExcluded = true
-		} else {
+		if !a.Excluded {
+			included++
 			availableBalance += a.Balance
 		}
 		if a.ID == accountID {
@@ -150,9 +156,17 @@ func buildDashboard(month string, accountID int64) DashboardData {
 	// Favorites still unspent this month are the fixed costs yet to go out,
 	// so what's actually free to spend is the non-excluded balance minus them.
 	templates := filterUnspent(allTpl, spent)
+	excludedAcct := map[int64]bool{}
+	for _, a := range accounts {
+		if a.Excluded {
+			excludedAcct[a.ID] = true
+		}
+	}
 	var upcomingFixed int64
 	for _, t := range templates {
-		if t.Type == "expense" {
+		// A fixed cost paid from an excluded account was never part of
+		// availableBalance, so subtracting it would double-count.
+		if t.Type == "expense" && !excludedAcct[t.AccountID] {
 			upcomingFixed += t.Amount
 		}
 	}
@@ -178,16 +192,16 @@ func buildDashboard(month string, accountID int64) DashboardData {
 		AvailableBalance: availableBalance,
 		UpcomingFixed:    upcomingFixed,
 		Spendable:        availableBalance - upcomingFixed,
-		HasExcluded:      hasExcluded,
-	}
+		AllExcluded:      len(accounts) > 0 && included == 0,
+	}, nil
 }
 
-func monthBudgets(month string) map[string]int64 {
+func monthBudgets(month string) (map[string]int64, error) {
 	budgets := map[string]int64{}
 	rows, err := db.Query(`SELECT category, amount FROM budgets WHERE month = ?`, month)
 	if err != nil {
 		log.Println(err)
-		return budgets
+		return budgets, err
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -197,10 +211,10 @@ func monthBudgets(month string) map[string]int64 {
 			budgets[c] = a
 		}
 	}
-	return budgets
+	return budgets, rows.Err()
 }
 
-func monthTransactions(month string, accountID int64) []Transaction {
+func monthTransactions(month string, accountID int64) ([]Transaction, error) {
 	monthStart, monthEnd := monthRange(month)
 	query := `SELECT t.id, t.account_id, a.name, t.date, t.type, t.category, t.amount, t.memo
 		FROM transactions t JOIN accounts a ON a.id = t.account_id
@@ -215,7 +229,7 @@ func monthTransactions(month string, accountID int64) []Transaction {
 	rows, err := db.Query(query, args...)
 	if err != nil {
 		log.Println(err)
-		return nil
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -229,5 +243,5 @@ func monthTransactions(month string, accountID int64) []Transaction {
 		tx.Memo = memo.String
 		out = append(out, tx)
 	}
-	return out
+	return out, rows.Err()
 }

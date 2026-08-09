@@ -11,10 +11,15 @@ var db *sql.DB
 
 func initDB(path string) {
 	var err error
-	db, err = sql.Open("sqlite", path)
+	// WAL lets the dashboard's parallel reads proceed while a write is in
+	// flight, and busy_timeout makes any remaining contention wait rather
+	// than fail the query outright.
+	db, err = sql.Open("sqlite", path+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		log.Fatal(err)
 	}
+	db.SetMaxOpenConns(4)
+	db.SetMaxIdleConns(4)
 	setupSchema()
 }
 
@@ -194,11 +199,11 @@ func ensureColumn(table, column, def string) {
 	}
 }
 
-func listAccounts() []Account {
+func listAccounts() ([]Account, error) {
 	rows, err := db.Query(`SELECT id, name, icon, balance, COALESCE(excluded,0) FROM accounts ORDER BY sort_order, id`)
 	if err != nil {
 		log.Println(err)
-		return nil
+		return nil, err
 	}
 	defer rows.Close()
 	var out []Account
@@ -208,7 +213,7 @@ func listAccounts() []Account {
 			out = append(out, a)
 		}
 	}
-	return out
+	return out, rows.Err()
 }
 
 // accountNetTotals returns income minus expense per account, in one query
@@ -302,12 +307,12 @@ func deleteAccountReassign(id string) error {
 	return tx.Commit()
 }
 
-func listTemplates() []Template {
+func listTemplates() ([]Template, error) {
 	rows, err := db.Query(`SELECT t.id, t.account_id, a.name, a.icon, t.type, t.category, t.amount, t.memo
 		FROM templates t JOIN accounts a ON a.id = t.account_id ORDER BY t.sort_order, t.id`)
 	if err != nil {
 		log.Println(err)
-		return nil
+		return nil, err
 	}
 	defer rows.Close()
 	var out []Template
@@ -319,5 +324,5 @@ func listTemplates() []Template {
 			out = append(out, t)
 		}
 	}
-	return out
+	return out, rows.Err()
 }

@@ -26,9 +26,11 @@
     });
   }
 
-  // Bubble phase on purpose: an inline onsubmit="return confirm(...)" that the
-  // user cancels stops the event before it reaches us, so no stuck spinner.
+  // Bubble phase, so an inline onsubmit="return confirm(...)" has already run
+  // by now. Cancelling it only calls preventDefault — the event still reaches
+  // us — so check that explicitly or the spinner would spin forever.
   document.addEventListener('submit', function (e) {
+    if (e.defaultPrevented) return;
     var form = e.target;
     if (!(form instanceof HTMLFormElement)) return;
     if (form.classList.contains('busy')) { e.preventDefault(); return; }

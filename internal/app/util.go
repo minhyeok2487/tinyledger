@@ -104,6 +104,16 @@ func currentMonth() string {
 	return time.Now().Format("2006-01")
 }
 
+// normalizeMonth accepts only a well-formed "2006-01" and falls back to the
+// current month otherwise. Without it a bogus ?month= would be echoed in the
+// header while the queries silently reported some other month's data.
+func normalizeMonth(month string) string {
+	if _, err := time.Parse("2006-01", month); err != nil {
+		return currentMonth()
+	}
+	return month
+}
+
 // monthRange turns "2006-01" into the half-open date bounds [start, end),
 // so queries can compare the indexed date column directly instead of
 // wrapping it in substr(), which would prevent an index scan.

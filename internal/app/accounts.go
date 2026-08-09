@@ -7,7 +7,7 @@ import (
 )
 
 func handleAccounts(w http.ResponseWriter, r *http.Request) {
-	accounts := listAccounts()
+	accounts, _ := listAccounts()
 	balances := accountNetTotals()
 	// Accounts with no transactions get no row above; the template indexes
 	// this map directly, so give every account an entry.

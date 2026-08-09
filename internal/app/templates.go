@@ -12,9 +12,11 @@ const insertTemplateSQL = `INSERT INTO templates(account_id, type, category, amo
 	VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order),-1)+1 FROM templates))`
 
 func handleTemplates(w http.ResponseWriter, r *http.Request) {
+	items, _ := listTemplates()
+	accounts, _ := listAccounts()
 	data := TemplatesData{
-		Items:       listTemplates(),
-		Accounts:    listAccounts(),
+		Items:       items,
+		Accounts:    accounts,
 		ExpenseCats: expenseCategories,
 		IncomeCats:  incomeCategories,
 		Nav:         "templates",
@@ -56,13 +58,13 @@ func handleTemplateDelete(w http.ResponseWriter, r *http.Request) {
 // spentTemplateKeys indexes the month's transactions by template identity, so
 // favorites already logged this month can be filtered out. Split from
 // filterUnspent so buildDashboard can run this query alongside the others.
-func spentTemplateKeys(month string) map[string]bool {
+func spentTemplateKeys(month string) (map[string]bool, error) {
 	monthStart, monthEnd := monthRange(month)
 	rows, err := db.Query(`SELECT type, category, amount, COALESCE(memo,'') FROM transactions
 		WHERE date >= ? AND date < ?`, monthStart, monthEnd)
 	if err != nil {
 		log.Println(err)
-		return nil
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -74,7 +76,7 @@ func spentTemplateKeys(month string) map[string]bool {
 			spent[templateKey(typ, category, amount, memo)] = true
 		}
 	}
-	return spent
+	return spent, rows.Err()
 }
 
 // filterUnspent returns the favorites with no matching transaction
