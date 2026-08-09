@@ -1,14 +1,22 @@
 package app
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 )
 
+// insertTemplateSQL appends a favorite at the end of the list, deriving
+// sort_order in the same round trip as the insert.
+const insertTemplateSQL = `INSERT INTO templates(account_id, type, category, amount, memo, sort_order)
+	VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order),-1)+1 FROM templates))`
+
 func handleTemplates(w http.ResponseWriter, r *http.Request) {
+	items, _ := listTemplates()
+	accounts, _ := listAccounts()
 	data := TemplatesData{
-		Items:       listTemplates(),
-		Accounts:    listAccounts(),
+		Items:       items,
+		Accounts:    accounts,
 		ExpenseCats: expenseCategories,
 		IncomeCats:  incomeCategories,
 		Nav:         "templates",
@@ -36,10 +44,7 @@ func handleTemplateAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var maxOrder int
-	db.QueryRow(`SELECT COALESCE(MAX(sort_order),-1) FROM templates`).Scan(&maxOrder)
-	db.Exec(`INSERT INTO templates(account_id, type, category, amount, memo, sort_order) VALUES (?, ?, ?, ?, ?, ?)`,
-		accountID, typ, category, amount, memo, maxOrder+1)
+	db.Exec(insertTemplateSQL, accountID, typ, category, amount, memo)
 
 	http.Redirect(w, r, "/templates", http.StatusSeeOther)
 }
@@ -50,19 +55,42 @@ func handleTemplateDelete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/templates", http.StatusSeeOther)
 }
 
-// unspentTemplates returns favorites that don't already have a matching
-// transaction (same type/category/amount/memo) logged in the given month.
-func unspentTemplates(month string) []Template {
-	all := listTemplates()
+// spentTemplateKeys indexes the month's transactions by template identity, so
+// favorites already logged this month can be filtered out. Split from
+// filterUnspent so buildDashboard can run this query alongside the others.
+func spentTemplateKeys(month string) (map[string]bool, error) {
+	monthStart, monthEnd := monthRange(month)
+	rows, err := db.Query(`SELECT type, category, amount, COALESCE(memo,'') FROM transactions
+		WHERE date >= ? AND date < ?`, monthStart, monthEnd)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	spent := map[string]bool{}
+	for rows.Next() {
+		var typ, category, memo string
+		var amount int64
+		if rows.Scan(&typ, &category, &amount, &memo) == nil {
+			spent[templateKey(typ, category, amount, memo)] = true
+		}
+	}
+	return spent, rows.Err()
+}
+
+// filterUnspent returns the favorites with no matching transaction
+// (same type/category/amount/memo) in the month spent was built from.
+func filterUnspent(all []Template, spent map[string]bool) []Template {
 	var out []Template
 	for _, t := range all {
-		var count int
-		db.QueryRow(`SELECT COUNT(*) FROM transactions
-			WHERE substr(date,1,7) = ? AND type = ? AND category = ? AND amount = ? AND memo = ?`,
-			month, t.Type, t.Category, t.Amount, t.Memo).Scan(&count)
-		if count == 0 {
+		if !spent[templateKey(t.Type, t.Category, t.Amount, t.Memo)] {
 			out = append(out, t)
 		}
 	}
 	return out
+}
+
+func templateKey(typ, category string, amount int64, memo string) string {
+	return typ + "\x00" + category + "\x00" + strconv.FormatInt(amount, 10) + "\x00" + memo
 }

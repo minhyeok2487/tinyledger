@@ -3,6 +3,7 @@ package app
 import (
 	"net/http"
 	"strconv"
+	"time"
 )
 
 func handleAdd(w http.ResponseWriter, r *http.Request) {
@@ -22,7 +23,13 @@ func handleAdd(w http.ResponseWriter, r *http.Request) {
 	if accountID == 0 {
 		accountID = 1
 	}
-	if err != nil || amount <= 0 || date == "" || (typ != "income" && typ != "expense") {
+	// The date must be a full YYYY-MM-DD: month views compare it as a range,
+	// so a short value would store a row that no month can ever show.
+	if _, dErr := time.Parse("2006-01-02", date); dErr != nil {
+		http.Error(w, "invalid date", 400)
+		return
+	}
+	if err != nil || amount <= 0 || (typ != "income" && typ != "expense") {
 		http.Error(w, "invalid input", 400)
 		return
 	}
@@ -35,10 +42,7 @@ func handleAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.FormValue("save_template") == "on" {
-		var maxOrder int
-		db.QueryRow(`SELECT COALESCE(MAX(sort_order),-1) FROM templates`).Scan(&maxOrder)
-		db.Exec(`INSERT INTO templates(account_id, type, category, amount, memo, sort_order) VALUES (?, ?, ?, ?, ?, ?)`,
-			accountID, typ, category, amount, memo, maxOrder+1)
+		db.Exec(insertTemplateSQL, accountID, typ, category, amount, memo)
 	}
 
 	month := date[:7]

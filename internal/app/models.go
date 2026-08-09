@@ -5,6 +5,9 @@ type Account struct {
 	Name    string
 	Icon    string
 	Balance int64
+	// Excluded keeps an account (e.g. 비상금/세이프박스) out of the
+	// "쓸 수 있는 돈" calculation. It still shows everywhere else.
+	Excluded bool
 }
 
 type Transaction struct {
@@ -50,6 +53,12 @@ type DashboardData struct {
 	Income       int64
 	Expense      int64
 	Balance      int64
+	// AvailableBalance is TotalBalance minus excluded accounts; Spendable is
+	// that minus UpcomingFixed (this month's not-yet-logged fixed costs).
+	AvailableBalance int64
+	UpcomingFixed    int64
+	Spendable        int64
+	AllExcluded      bool
 	Categories   []CategorySum
 	Transactions []Transaction
 	Templates    []Template

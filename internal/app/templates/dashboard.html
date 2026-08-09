@@ -19,9 +19,9 @@
       <span class="rb-total-amount">{{comma .TotalBalance}}</span>
     </div>
     {{range .Accounts}}
-    <div class="rb-acc">
+    <div class="rb-acc{{if .Excluded}} excluded{{end}}">
       <span class="rb-icon">{{.Icon}}</span>
-      <span class="rb-name">{{.Name}}</span>
+      <span class="rb-name">{{.Name}}{{if .Excluded}} <span class="rb-excl-tag">🔒 제외</span>{{end}}</span>
       <span class="rb-amt">{{comma .Balance}}</span>
     </div>
     {{end}}
@@ -71,10 +71,22 @@
       <div class="label">지출</div>
       <div class="amount">{{comma .Expense}}</div>
     </div>
+    {{if .AccountID}}
     <div class="card balance">
       <div class="label">잔액</div>
       <div class="amount">{{comma .Balance}}</div>
     </div>
+    {{else}}
+    <div class="card spendable">
+      <div class="label">쓸 수 있는 돈</div>
+      <div class="amount{{if lt .Spendable 0}} neg{{end}}">{{comma .Spendable}}</div>
+      {{if .AllExcluded}}
+      <div class="sub">모든 계좌가 제외되어 있습니다</div>
+      {{else}}
+      <div class="sub">{{comma .AvailableBalance}} − 고정비 {{comma .UpcomingFixed}}</div>
+      {{end}}
+    </div>
+    {{end}}
   </section>
 
   <div class="dash-grid">
@@ -207,5 +219,6 @@ function applyFav(btn) {
 }
 </script>
 {{template "nav" .}}
+{{template "scripts" .}}
 </body>
 </html>

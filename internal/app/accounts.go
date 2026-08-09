@@ -1,19 +1,20 @@
 package app
 
 import (
-	"database/sql"
+	"errors"
 	"net/http"
 	"strconv"
 )
 
 func handleAccounts(w http.ResponseWriter, r *http.Request) {
-	accounts := listAccounts()
-	balances := map[int64]int64{}
+	accounts, _ := listAccounts()
+	balances := accountNetTotals()
+	// Accounts with no transactions get no row above; the template indexes
+	// this map directly, so give every account an entry.
 	for _, a := range accounts {
-		var income, expense sql.NullInt64
-		db.QueryRow(`SELECT SUM(CASE WHEN type='income' THEN amount ELSE 0 END),
-			SUM(CASE WHEN type='expense' THEN amount ELSE 0 END) FROM transactions WHERE account_id = ?`, a.ID).Scan(&income, &expense)
-		balances[a.ID] = income.Int64 - expense.Int64
+		if _, ok := balances[a.ID]; !ok {
+			balances[a.ID] = 0
+		}
 	}
 
 	data := AccountsData{Accounts: accounts, Balances: balances, Nav: "accounts"}
@@ -57,7 +58,12 @@ func handleAccountUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	balance, _ := strconv.ParseInt(r.FormValue("balance"), 10, 64)
-	db.Exec(`UPDATE accounts SET name = ?, icon = ?, balance = ? WHERE id = ?`, name, icon, balance, id)
+	// An unchecked checkbox posts nothing, so absence means "not excluded".
+	excluded := 0
+	if r.FormValue("excluded") != "" {
+		excluded = 1
+	}
+	db.Exec(`UPDATE accounts SET name = ?, icon = ?, balance = ?, excluded = ? WHERE id = ?`, name, icon, balance, excluded, id)
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }
 
@@ -81,17 +87,11 @@ func handleTransfer(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleAccountDelete(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	var count int
-	db.QueryRow(`SELECT COUNT(*) FROM accounts`).Scan(&count)
-	if count <= 1 {
-		http.Redirect(w, r, "/accounts", http.StatusSeeOther)
+	// Refusing to delete the last account isn't an error worth showing —
+	// the page just comes back unchanged.
+	if err := deleteAccountReassign(r.PathValue("id")); err != nil && !errors.Is(err, errLastAccount) {
+		http.Error(w, err.Error(), 500)
 		return
 	}
-	var first int64
-	db.QueryRow(`SELECT id FROM accounts WHERE id != ? ORDER BY sort_order, id LIMIT 1`, id).Scan(&first)
-	db.Exec(`UPDATE transactions SET account_id = ? WHERE account_id = ?`, first, id)
-	db.Exec(`UPDATE templates SET account_id = ? WHERE account_id = ?`, first, id)
-	db.Exec(`DELETE FROM accounts WHERE id = ?`, id)
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }

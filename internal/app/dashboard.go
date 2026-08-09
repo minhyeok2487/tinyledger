@@ -5,21 +5,22 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
 )
 
 func handleDashboard(w http.ResponseWriter, r *http.Request) {
-	month := r.URL.Query().Get("month")
-	if month == "" {
-		month = currentMonth()
-	}
+	month := normalizeMonth(r.URL.Query().Get("month"))
 	accountID := int64(0)
 	if v := r.URL.Query().Get("account"); v != "" {
 		accountID, _ = strconv.ParseInt(v, 10, 64)
 	}
 
-	data := buildDashboard(month, accountID)
+	data, err := buildDashboard(month, accountID)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 	data.Nav = "dashboard"
-	data.Note = getNote()
 
 	if err := tpl.ExecuteTemplate(w, "dashboard.html", data); err != nil {
 		http.Error(w, err.Error(), 500)
@@ -32,58 +33,67 @@ func handleNoteSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	saveNote(r.FormValue("content"))
-	month := r.FormValue("month")
-	if month == "" {
-		month = currentMonth()
-	}
+	month := normalizeMonth(r.FormValue("month"))
 	http.Redirect(w, r, "/?month="+month, http.StatusSeeOther)
 }
 
-func buildDashboard(month string, accountID int64) DashboardData {
+func buildDashboard(month string, accountID int64) (DashboardData, error) {
 	prev := shiftMonth(month, -1)
 	next := shiftMonth(month, 1)
 
-	budgets := map[string]int64{}
-	brows, err := db.Query(`SELECT category, amount FROM budgets WHERE month = ?`, month)
-	if err == nil {
-		for brows.Next() {
-			var c string
-			var a int64
-			if brows.Scan(&c, &a) == nil {
-				budgets[c] = a
-			}
+	// These six reads are independent of each other, and against a remote
+	// Turso database each one is a full network round trip. Run them
+	// concurrently: every goroutine writes to its own variable, and nothing
+	// is read until wg.Wait() returns, so no locking is needed.
+	var (
+		wg       sync.WaitGroup
+		errs     [5]error
+		budgets  map[string]int64
+		txs      []Transaction
+		accounts []Account
+		allTpl   []Template
+		spent    map[string]bool
+		note     string
+	)
+
+	wg.Add(6)
+	go func() {
+		defer wg.Done()
+		budgets, errs[0] = monthBudgets(month)
+	}()
+	go func() {
+		defer wg.Done()
+		txs, errs[1] = monthTransactions(month, accountID)
+	}()
+	go func() {
+		defer wg.Done()
+		accounts, errs[2] = listAccounts()
+	}()
+	go func() {
+		defer wg.Done()
+		allTpl, errs[3] = listTemplates()
+	}()
+	go func() {
+		defer wg.Done()
+		spent, errs[4] = spentTemplateKeys(month)
+	}()
+	go func() {
+		defer wg.Done()
+		note = getNote() // absent note is normal, not an error
+	}()
+	wg.Wait()
+
+	// A failed query would otherwise render as a plausible-looking zero —
+	// a 총 잔액 of 0 and a large negative 쓸 수 있는 돈. Fail loudly instead.
+	for _, err := range errs {
+		if err != nil {
+			return DashboardData{}, err
 		}
-		brows.Close()
 	}
 
-	query := `SELECT t.id, t.account_id, a.name, t.date, t.type, t.category, t.amount, t.memo
-		FROM transactions t JOIN accounts a ON a.id = t.account_id
-		WHERE substr(t.date,1,7) = ?`
-	args := []any{month}
-	if accountID > 0 {
-		query += ` AND t.account_id = ?`
-		args = append(args, accountID)
-	}
-	query += ` ORDER BY t.date DESC, t.id DESC`
-
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		log.Println(err)
-	}
-	defer rows.Close()
-
-	var txs []Transaction
 	var income, expense int64
 	catTotals := map[string]int64{}
-
-	for rows.Next() {
-		var tx Transaction
-		var memo sql.NullString
-		if err := rows.Scan(&tx.ID, &tx.AccountID, &tx.AccountName, &tx.Date, &tx.Type, &tx.Category, &tx.Amount, &memo); err != nil {
-			continue
-		}
-		tx.Memo = memo.String
-		txs = append(txs, tx)
+	for _, tx := range txs {
 		if tx.Type == "income" {
 			income += tx.Amount
 		} else {
@@ -126,11 +136,14 @@ func buildDashboard(month string, accountID int64) DashboardData {
 		}
 	}
 
-	accounts := listAccounts()
-	var totalBalance int64
-	var selectedBalance int64
+	var totalBalance, availableBalance, selectedBalance int64
+	included := 0
 	for _, a := range accounts {
 		totalBalance += a.Balance
+		if !a.Excluded {
+			included++
+			availableBalance += a.Balance
+		}
 		if a.ID == accountID {
 			selectedBalance = a.Balance
 		}
@@ -138,6 +151,24 @@ func buildDashboard(month string, accountID int64) DashboardData {
 	realBalance := totalBalance
 	if accountID > 0 {
 		realBalance = selectedBalance
+	}
+
+	// Favorites still unspent this month are the fixed costs yet to go out,
+	// so what's actually free to spend is the non-excluded balance minus them.
+	templates := filterUnspent(allTpl, spent)
+	excludedAcct := map[int64]bool{}
+	for _, a := range accounts {
+		if a.Excluded {
+			excludedAcct[a.ID] = true
+		}
+	}
+	var upcomingFixed int64
+	for _, t := range templates {
+		// A fixed cost paid from an excluded account was never part of
+		// availableBalance, so subtracting it would double-count.
+		if t.Type == "expense" && !excludedAcct[t.AccountID] {
+			upcomingFixed += t.Amount
+		}
 	}
 
 	return DashboardData{
@@ -153,8 +184,64 @@ func buildDashboard(month string, accountID int64) DashboardData {
 		Balance:      realBalance,
 		Categories:   cats,
 		Transactions: txs,
-		Templates:    unspentTemplates(month),
+		Templates:    templates,
 		ExpenseCats:  expenseCategories,
 		IncomeCats:   incomeCategories,
+		Note:         note,
+
+		AvailableBalance: availableBalance,
+		UpcomingFixed:    upcomingFixed,
+		Spendable:        availableBalance - upcomingFixed,
+		AllExcluded:      len(accounts) > 0 && included == 0,
+	}, nil
+}
+
+func monthBudgets(month string) (map[string]int64, error) {
+	budgets := map[string]int64{}
+	rows, err := db.Query(`SELECT category, amount FROM budgets WHERE month = ?`, month)
+	if err != nil {
+		log.Println(err)
+		return budgets, err
 	}
+	defer rows.Close()
+	for rows.Next() {
+		var c string
+		var a int64
+		if rows.Scan(&c, &a) == nil {
+			budgets[c] = a
+		}
+	}
+	return budgets, rows.Err()
+}
+
+func monthTransactions(month string, accountID int64) ([]Transaction, error) {
+	monthStart, monthEnd := monthRange(month)
+	query := `SELECT t.id, t.account_id, a.name, t.date, t.type, t.category, t.amount, t.memo
+		FROM transactions t JOIN accounts a ON a.id = t.account_id
+		WHERE t.date >= ? AND t.date < ?`
+	args := []any{monthStart, monthEnd}
+	if accountID > 0 {
+		query += ` AND t.account_id = ?`
+		args = append(args, accountID)
+	}
+	query += ` ORDER BY t.date DESC, t.id DESC`
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Transaction
+	for rows.Next() {
+		var tx Transaction
+		var memo sql.NullString
+		if err := rows.Scan(&tx.ID, &tx.AccountID, &tx.AccountName, &tx.Date, &tx.Type, &tx.Category, &tx.Amount, &memo); err != nil {
+			continue
+		}
+		tx.Memo = memo.String
+		out = append(out, tx)
+	}
+	return out, rows.Err()
 }
