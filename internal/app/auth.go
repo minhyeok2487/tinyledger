@@ -55,7 +55,22 @@ func validSession(value, pw string) bool {
 // safeNext keeps the post-login redirect on this site — an attacker-supplied
 // ?next= must not be able to bounce the user to another host.
 func safeNext(next string) string {
-	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
+	if next == "" || !strings.HasPrefix(next, "/") {
+		return "/"
+	}
+	// Browsers normalize backslashes to slashes and strip tabs and newlines
+	// from URLs, so "/\evil.com" and "/<TAB>/evil.com" both end up as
+	// "//evil.com" — off-site — despite starting with a single slash.
+	if strings.ContainsRune(next, '\\') {
+		return "/"
+	}
+	for _, r := range next {
+		if r < 0x20 || r == 0x7f {
+			return "/"
+		}
+	}
+	u, err := url.Parse(next)
+	if err != nil || u.Scheme != "" || u.Host != "" || !strings.HasPrefix(u.Path, "/") {
 		return "/"
 	}
 	return next
@@ -101,12 +116,12 @@ func requireAuth(next http.Handler) http.Handler {
 
 		c, err := r.Cookie(sessionCookie)
 		if err != nil || !validSession(c.Value, pw) {
-			if r.Method == http.MethodGet {
-				http.Redirect(w, r, "/login?next="+url.QueryEscape(r.URL.RequestURI()), http.StatusSeeOther)
-			} else {
-				// A POST from an expired tab shouldn't silently redirect and
-				// look like it worked.
+			// A POST from an expired tab shouldn't silently redirect and look
+			// like it worked; anything else just goes to the login page.
+			if r.Method == http.MethodPost {
 				http.Error(w, "세션이 만료되었습니다. 다시 로그인해주세요.", http.StatusUnauthorized)
+			} else {
+				http.Redirect(w, r, "/login?next="+url.QueryEscape(r.URL.RequestURI()), http.StatusSeeOther)
 			}
 			return
 		}
@@ -115,8 +130,14 @@ func requireAuth(next http.Handler) http.Handler {
 }
 
 func handleLoginPage(w http.ResponseWriter, r *http.Request) {
-	if !authEnabled() {
+	pw := sitePassword()
+	if pw == "" {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	// Already signed in — no reason to show the form again.
+	if c, err := r.Cookie(sessionCookie); err == nil && validSession(c.Value, pw) {
+		http.Redirect(w, r, safeNext(r.FormValue("next")), http.StatusSeeOther)
 		return
 	}
 	renderLogin(w, r, "")

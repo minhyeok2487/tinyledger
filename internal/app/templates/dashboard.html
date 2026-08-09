@@ -147,7 +147,7 @@
       {{end}}
 
       <form method="post" action="/add">
-        <input type="hidden" name="account_id" value="{{if .AccountID}}{{.AccountID}}{{else}}1{{end}}" id="add-account-id">
+        <input type="hidden" name="account_id" value="{{if .AccountID}}{{.AccountID}}{{else}}{{if .Accounts}}{{(index .Accounts 0).ID}}{{end}}{{end}}" id="add-account-id">
         <div class="row">
           <input type="date" name="date" required value="{{.Month}}-01">
           <select name="type" class="type-select" onchange="updateCategoryOptions(this)">

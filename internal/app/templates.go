@@ -8,8 +8,8 @@ import (
 
 // insertTemplateSQL appends a favorite at the end of the list, deriving
 // sort_order in the same round trip as the insert.
-const insertTemplateSQL = `INSERT INTO templates(account_id, type, category, amount, memo, sort_order)
-	VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order),-1)+1 FROM templates))`
+var insertTemplateSQL = `INSERT INTO templates(account_id, type, category, amount, memo, sort_order)
+	VALUES (` + accountIDOrDefault + `, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order),-1)+1 FROM templates))`
 
 func handleTemplates(w http.ResponseWriter, r *http.Request) {
 	items, _ := listTemplates()

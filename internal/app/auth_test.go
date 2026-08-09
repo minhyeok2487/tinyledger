@@ -49,6 +49,13 @@ func TestSafeNext(t *testing.T) {
 		"//evil.example":       "/",
 		"evil.example":         "/",
 		"javascript:alert(1)":  "/",
+		// Browsers turn these into "//evil.example" — off-site — even though
+		// they start with a single slash.
+		"/\\evil.example":   "/",
+		"/\\/evil.example":  "/",
+		"/\t/evil.example":  "/",
+		"/\n//evil.example": "/",
+		"/ok/path":          "/ok/path",
 	}
 	for in, want := range tests {
 		if got := safeNext(in); got != want {

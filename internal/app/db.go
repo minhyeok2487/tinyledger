@@ -199,6 +199,14 @@ func ensureColumn(table, column, def string) {
 	}
 }
 
+// accountIDOrDefault resolves an account id in SQL, falling back to the first
+// existing account. Without it a stale id (e.g. the hardcoded 1 after that
+// account was deleted) would insert a row that joins to nothing and becomes
+// invisible everywhere.
+const accountIDOrDefault = `COALESCE(
+	(SELECT id FROM accounts WHERE id = ?),
+	(SELECT id FROM accounts ORDER BY sort_order, id LIMIT 1))`
+
 func listAccounts() ([]Account, error) {
 	rows, err := db.Query(`SELECT id, name, icon, balance, COALESCE(excluded,0) FROM accounts ORDER BY sort_order, id`)
 	if err != nil {

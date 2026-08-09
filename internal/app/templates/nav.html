@@ -18,15 +18,22 @@
 (function () {
   var TIMEOUT = 15000;
   var LIVE = '[data-live]';
-  var timer = null;
+  var timers = new WeakMap();
+
+  function releaseForm(form) {
+    clearTimeout(timers.get(form));
+    timers.delete(form);
+    form.classList.remove('busy');
+    form.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; });
+    // The progress bar belongs to the page, so only the last one out clears it.
+    if (!document.querySelector('form.busy')) {
+      document.documentElement.classList.remove('nav-busy');
+    }
+  }
 
   function clearBusy() {
-    clearTimeout(timer);
+    document.querySelectorAll('form.busy').forEach(releaseForm);
     document.documentElement.classList.remove('nav-busy');
-    document.querySelectorAll('form.busy').forEach(function (f) {
-      f.classList.remove('busy');
-      f.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; });
-    });
   }
 
   function markBusy(form) {
@@ -37,7 +44,7 @@
       var btn = form.querySelector('button[type=submit], button:not([type])');
       if (btn) btn.disabled = true;
     }, 0);
-    timer = setTimeout(clearBusy, TIMEOUT);
+    timers.set(form, setTimeout(function () { releaseForm(form); }, TIMEOUT));
   }
 
   // Replaces each data-live region with its counterpart from html.
@@ -69,7 +76,10 @@
       body: new URLSearchParams(new FormData(form)),
       credentials: 'same-origin',
     }).then(function (res) {
-      if (res.status === 401) { window.location.href = '/login'; return null; }
+      if (res.status === 401) {
+        window.location.href = '/login?next=' + encodeURIComponent(location.pathname + location.search);
+        return null;
+      }
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.text().then(function (html) { return { html: html, url: res.url }; });
     }).then(function (result) {
@@ -78,7 +88,8 @@
       // The POST may have redirected to a different month than the one on
       // screen; keep the address bar honest so a refresh shows the same thing.
       if (result.url) history.replaceState(null, '', result.url);
-      clearBusy();
+      releaseForm(form);
+      clearBusy(); // the swap may have replaced the form node itself
       if (focusedName) {
         var again = document.querySelector('[name="' + CSS.escape(focusedName) + '"]');
         if (again) again.focus();
