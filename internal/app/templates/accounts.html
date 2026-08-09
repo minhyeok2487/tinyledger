@@ -18,6 +18,7 @@
         <input type="text" name="icon" class="acc-icon-input" maxlength="2" value="{{.Icon}}">
         <input type="text" name="name" class="acc-name-input" value="{{.Name}}" required>
         <input type="number" name="balance" class="acc-balance-input" value="{{.Balance}}" placeholder="실제 잔액">
+        <label class="acc-excl" title="쓸 수 있는 돈 계산에서 제외합니다"><input type="checkbox" name="excluded" {{if .Excluded}}checked{{end}}>제외</label>
         <button type="submit" class="acc-save" title="저장">저장</button>
       </form>
       {{if gt (len $.Accounts) 1}}
@@ -65,5 +66,6 @@
 
 </div>
 {{template "nav" .}}
+{{template "scripts" .}}
 </body>
 </html>

@@ -8,6 +8,48 @@
 </nav>
 {{end}}
 
+{{define "scripts"}}
+<script>
+// Every write in this app is a full form POST + redirect, so without feedback
+// a click looks like nothing happened. One delegated listener marks the
+// submitting form busy; CSS turns its button into a spinner.
+(function () {
+  var TIMEOUT = 15000;
+  var timer = null;
+
+  function clearBusy() {
+    clearTimeout(timer);
+    document.documentElement.classList.remove('nav-busy');
+    document.querySelectorAll('form.busy').forEach(function (f) {
+      f.classList.remove('busy');
+      f.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; });
+    });
+  }
+
+  // Bubble phase on purpose: an inline onsubmit="return confirm(...)" that the
+  // user cancels stops the event before it reaches us, so no stuck spinner.
+  document.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    if (form.classList.contains('busy')) { e.preventDefault(); return; }
+
+    form.classList.add('busy');
+    document.documentElement.classList.add('nav-busy');
+    // Deferred so the button's own name/value still makes it into the POST.
+    setTimeout(function () {
+      var btn = form.querySelector('button[type=submit], button:not([type])');
+      if (btn) btn.disabled = true;
+    }, 0);
+    timer = setTimeout(clearBusy, TIMEOUT);
+  });
+
+  // Back button restoring the page from bfcache would otherwise show a
+  // spinner that never stops.
+  window.addEventListener('pageshow', clearBusy);
+})();
+</script>
+{{end}}
+
 {{define "head"}}
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

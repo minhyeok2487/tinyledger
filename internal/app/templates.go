@@ -6,6 +6,11 @@ import (
 	"strconv"
 )
 
+// insertTemplateSQL appends a favorite at the end of the list, deriving
+// sort_order in the same round trip as the insert.
+const insertTemplateSQL = `INSERT INTO templates(account_id, type, category, amount, memo, sort_order)
+	VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order),-1)+1 FROM templates))`
+
 func handleTemplates(w http.ResponseWriter, r *http.Request) {
 	data := TemplatesData{
 		Items:       listTemplates(),
@@ -37,10 +42,7 @@ func handleTemplateAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var maxOrder int
-	db.QueryRow(`SELECT COALESCE(MAX(sort_order),-1) FROM templates`).Scan(&maxOrder)
-	db.Exec(`INSERT INTO templates(account_id, type, category, amount, memo, sort_order) VALUES (?, ?, ?, ?, ?, ?)`,
-		accountID, typ, category, amount, memo, maxOrder+1)
+	db.Exec(insertTemplateSQL, accountID, typ, category, amount, memo)
 
 	http.Redirect(w, r, "/templates", http.StatusSeeOther)
 }
@@ -51,23 +53,20 @@ func handleTemplateDelete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/templates", http.StatusSeeOther)
 }
 
-// unspentTemplates returns favorites that don't already have a matching
-// transaction (same type/category/amount/memo) logged in the given month.
-func unspentTemplates(month string) []Template {
-	all := listTemplates()
-	if len(all) == 0 {
-		return nil
-	}
-
+// spentTemplateKeys indexes the month's transactions by template identity, so
+// favorites already logged this month can be filtered out. Split from
+// filterUnspent so buildDashboard can run this query alongside the others.
+func spentTemplateKeys(month string) map[string]bool {
 	monthStart, monthEnd := monthRange(month)
-	spent := map[string]bool{}
 	rows, err := db.Query(`SELECT type, category, amount, COALESCE(memo,'') FROM transactions
 		WHERE date >= ? AND date < ?`, monthStart, monthEnd)
 	if err != nil {
 		log.Println(err)
-		return all
+		return nil
 	}
 	defer rows.Close()
+
+	spent := map[string]bool{}
 	for rows.Next() {
 		var typ, category, memo string
 		var amount int64
@@ -75,7 +74,12 @@ func unspentTemplates(month string) []Template {
 			spent[templateKey(typ, category, amount, memo)] = true
 		}
 	}
+	return spent
+}
 
+// filterUnspent returns the favorites with no matching transaction
+// (same type/category/amount/memo) in the month spent was built from.
+func filterUnspent(all []Template, spent map[string]bool) []Template {
 	var out []Template
 	for _, t := range all {
 		if !spent[templateKey(t.Type, t.Category, t.Amount, t.Memo)] {

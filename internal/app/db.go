@@ -2,8 +2,8 @@ package app
 
 import (
 	"database/sql"
+	"errors"
 	"log"
-	"os"
 	"time"
 )
 
@@ -30,13 +30,39 @@ func initTursoDB(url, token string) {
 	db.SetConnMaxIdleTime(5 * time.Minute)
 	db.SetConnMaxLifetime(30 * time.Minute)
 
-	// setupSchema costs a dozen sequential round trips to the remote database,
-	// which every serverless cold start would otherwise pay before serving a
-	// byte. The schema is already in place there, so only run it when asked.
-	if os.Getenv("VERCEL") == "" || os.Getenv("RUN_MIGRATIONS") == "1" {
-		setupSchema()
+	// setupSchema costs a dozen sequential round trips, which every serverless
+	// cold start would otherwise pay before serving a byte. Check a stored
+	// version first: one round trip when the schema is already current.
+	if schemaCurrent() {
+		return
 	}
-	log.Println("Turso DB 연결:", url)
+	setupSchema()
+	recordSchemaVersion()
+	log.Println("Turso DB 스키마 갱신:", schemaVersion)
+}
+
+// schemaVersion is bumped whenever setupSchema gains a table, column, or
+// migration, so remote databases pick the change up on their next cold start.
+const schemaVersion = 2
+
+func schemaCurrent() bool {
+	var v int
+	// Errors here mean the table doesn't exist yet (pre-versioning database),
+	// which is exactly the case that needs the full setup to run.
+	if err := db.QueryRow(`SELECT COALESCE(MAX(version),0) FROM schema_meta`).Scan(&v); err != nil {
+		return false
+	}
+	return v >= schemaVersion
+}
+
+func recordSchemaVersion() {
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_meta (version INTEGER NOT NULL)`); err != nil {
+		log.Println("schema_meta:", err)
+		return
+	}
+	if _, err := db.Exec(`INSERT INTO schema_meta(version) VALUES (?)`, schemaVersion); err != nil {
+		log.Println("schema_meta insert:", err)
+	}
 }
 
 func setupSchema() {
@@ -92,6 +118,7 @@ func setupSchema() {
 
 	migrateRecurringToTemplates()
 	ensureColumn("accounts", "balance", "INTEGER NOT NULL DEFAULT 0")
+	ensureColumn("accounts", "excluded", "INTEGER NOT NULL DEFAULT 0")
 
 	// seed default account
 	var count int
@@ -168,7 +195,7 @@ func ensureColumn(table, column, def string) {
 }
 
 func listAccounts() []Account {
-	rows, err := db.Query(`SELECT id, name, icon, balance FROM accounts ORDER BY sort_order, id`)
+	rows, err := db.Query(`SELECT id, name, icon, balance, COALESCE(excluded,0) FROM accounts ORDER BY sort_order, id`)
 	if err != nil {
 		log.Println(err)
 		return nil
@@ -177,8 +204,30 @@ func listAccounts() []Account {
 	var out []Account
 	for rows.Next() {
 		var a Account
-		if err := rows.Scan(&a.ID, &a.Name, &a.Icon, &a.Balance); err == nil {
+		if err := rows.Scan(&a.ID, &a.Name, &a.Icon, &a.Balance, &a.Excluded); err == nil {
 			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// accountNetTotals returns income minus expense per account, in one query
+// rather than one per account.
+func accountNetTotals() map[int64]int64 {
+	out := map[int64]int64{}
+	rows, err := db.Query(`SELECT account_id,
+			COALESCE(SUM(CASE WHEN type='income'  THEN amount END),0),
+			COALESCE(SUM(CASE WHEN type='expense' THEN amount END),0)
+		FROM transactions GROUP BY account_id`)
+	if err != nil {
+		log.Println(err)
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, income, expense int64
+		if rows.Scan(&id, &income, &expense) == nil {
+			out[id] = income - expense
 		}
 	}
 	return out
@@ -208,6 +257,46 @@ func transferBetweenAccounts(fromID, toID, amount int64) error {
 	}
 	if _, err := tx.Exec(`UPDATE accounts SET balance = balance + ? WHERE id = ?`, amount, toID); err != nil {
 		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
+// errLastAccount means the delete was refused because it would leave the
+// ledger with no accounts at all.
+var errLastAccount = errors.New("cannot delete the last account")
+
+// deleteAccountReassign moves an account's transactions and templates onto
+// another account before removing it, all in one transaction so a mid-way
+// failure can't orphan them.
+func deleteAccountReassign(id string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var count int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM accounts`).Scan(&count); err != nil {
+		return err
+	}
+	if count <= 1 {
+		return errLastAccount
+	}
+
+	var first int64
+	if err := tx.QueryRow(`SELECT id FROM accounts WHERE id != ? ORDER BY sort_order, id LIMIT 1`, id).Scan(&first); err != nil {
+		return err
+	}
+	for _, stmt := range []string{
+		`UPDATE transactions SET account_id = ? WHERE account_id = ?`,
+		`UPDATE templates SET account_id = ? WHERE account_id = ?`,
+	} {
+		if _, err := tx.Exec(stmt, first, id); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(`DELETE FROM accounts WHERE id = ?`, id); err != nil {
 		return err
 	}
 	return tx.Commit()

@@ -35,10 +35,7 @@ func handleAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.FormValue("save_template") == "on" {
-		var maxOrder int
-		db.QueryRow(`SELECT COALESCE(MAX(sort_order),-1) FROM templates`).Scan(&maxOrder)
-		db.Exec(`INSERT INTO templates(account_id, type, category, amount, memo, sort_order) VALUES (?, ?, ?, ?, ?, ?)`,
-			accountID, typ, category, amount, memo, maxOrder+1)
+		db.Exec(insertTemplateSQL, accountID, typ, category, amount, memo)
 	}
 
 	month := date[:7]

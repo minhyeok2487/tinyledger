@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
 )
 
 func handleDashboard(w http.ResponseWriter, r *http.Request) {
@@ -19,7 +20,6 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	data := buildDashboard(month, accountID)
 	data.Nav = "dashboard"
-	data.Note = getNote()
 
 	if err := tpl.ExecuteTemplate(w, "dashboard.html", data); err != nil {
 		http.Error(w, err.Error(), 500)
@@ -43,48 +43,50 @@ func buildDashboard(month string, accountID int64) DashboardData {
 	prev := shiftMonth(month, -1)
 	next := shiftMonth(month, 1)
 
-	budgets := map[string]int64{}
-	brows, err := db.Query(`SELECT category, amount FROM budgets WHERE month = ?`, month)
-	if err == nil {
-		for brows.Next() {
-			var c string
-			var a int64
-			if brows.Scan(&c, &a) == nil {
-				budgets[c] = a
-			}
-		}
-		brows.Close()
-	}
+	// These six reads are independent of each other, and against a remote
+	// Turso database each one is a full network round trip. Run them
+	// concurrently: every goroutine writes to its own variable, and nothing
+	// is read until wg.Wait() returns, so no locking is needed.
+	var (
+		wg       sync.WaitGroup
+		budgets  map[string]int64
+		txs      []Transaction
+		accounts []Account
+		allTpl   []Template
+		spent    map[string]bool
+		note     string
+	)
 
-	monthStart, monthEnd := monthRange(month)
-	query := `SELECT t.id, t.account_id, a.name, t.date, t.type, t.category, t.amount, t.memo
-		FROM transactions t JOIN accounts a ON a.id = t.account_id
-		WHERE t.date >= ? AND t.date < ?`
-	args := []any{monthStart, monthEnd}
-	if accountID > 0 {
-		query += ` AND t.account_id = ?`
-		args = append(args, accountID)
-	}
-	query += ` ORDER BY t.date DESC, t.id DESC`
+	wg.Add(6)
+	go func() {
+		defer wg.Done()
+		budgets = monthBudgets(month)
+	}()
+	go func() {
+		defer wg.Done()
+		txs = monthTransactions(month, accountID)
+	}()
+	go func() {
+		defer wg.Done()
+		accounts = listAccounts()
+	}()
+	go func() {
+		defer wg.Done()
+		allTpl = listTemplates()
+	}()
+	go func() {
+		defer wg.Done()
+		spent = spentTemplateKeys(month)
+	}()
+	go func() {
+		defer wg.Done()
+		note = getNote()
+	}()
+	wg.Wait()
 
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		log.Println(err)
-	}
-	defer rows.Close()
-
-	var txs []Transaction
 	var income, expense int64
 	catTotals := map[string]int64{}
-
-	for rows.Next() {
-		var tx Transaction
-		var memo sql.NullString
-		if err := rows.Scan(&tx.ID, &tx.AccountID, &tx.AccountName, &tx.Date, &tx.Type, &tx.Category, &tx.Amount, &memo); err != nil {
-			continue
-		}
-		tx.Memo = memo.String
-		txs = append(txs, tx)
+	for _, tx := range txs {
 		if tx.Type == "income" {
 			income += tx.Amount
 		} else {
@@ -127,11 +129,15 @@ func buildDashboard(month string, accountID int64) DashboardData {
 		}
 	}
 
-	accounts := listAccounts()
-	var totalBalance int64
-	var selectedBalance int64
+	var totalBalance, availableBalance, selectedBalance int64
+	hasExcluded := false
 	for _, a := range accounts {
 		totalBalance += a.Balance
+		if a.Excluded {
+			hasExcluded = true
+		} else {
+			availableBalance += a.Balance
+		}
 		if a.ID == accountID {
 			selectedBalance = a.Balance
 		}
@@ -139,6 +145,16 @@ func buildDashboard(month string, accountID int64) DashboardData {
 	realBalance := totalBalance
 	if accountID > 0 {
 		realBalance = selectedBalance
+	}
+
+	// Favorites still unspent this month are the fixed costs yet to go out,
+	// so what's actually free to spend is the non-excluded balance minus them.
+	templates := filterUnspent(allTpl, spent)
+	var upcomingFixed int64
+	for _, t := range templates {
+		if t.Type == "expense" {
+			upcomingFixed += t.Amount
+		}
 	}
 
 	return DashboardData{
@@ -154,8 +170,64 @@ func buildDashboard(month string, accountID int64) DashboardData {
 		Balance:      realBalance,
 		Categories:   cats,
 		Transactions: txs,
-		Templates:    unspentTemplates(month),
+		Templates:    templates,
 		ExpenseCats:  expenseCategories,
 		IncomeCats:   incomeCategories,
+		Note:         note,
+
+		AvailableBalance: availableBalance,
+		UpcomingFixed:    upcomingFixed,
+		Spendable:        availableBalance - upcomingFixed,
+		HasExcluded:      hasExcluded,
 	}
+}
+
+func monthBudgets(month string) map[string]int64 {
+	budgets := map[string]int64{}
+	rows, err := db.Query(`SELECT category, amount FROM budgets WHERE month = ?`, month)
+	if err != nil {
+		log.Println(err)
+		return budgets
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c string
+		var a int64
+		if rows.Scan(&c, &a) == nil {
+			budgets[c] = a
+		}
+	}
+	return budgets
+}
+
+func monthTransactions(month string, accountID int64) []Transaction {
+	monthStart, monthEnd := monthRange(month)
+	query := `SELECT t.id, t.account_id, a.name, t.date, t.type, t.category, t.amount, t.memo
+		FROM transactions t JOIN accounts a ON a.id = t.account_id
+		WHERE t.date >= ? AND t.date < ?`
+	args := []any{monthStart, monthEnd}
+	if accountID > 0 {
+		query += ` AND t.account_id = ?`
+		args = append(args, accountID)
+	}
+	query += ` ORDER BY t.date DESC, t.id DESC`
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		log.Println(err)
+		return nil
+	}
+	defer rows.Close()
+
+	var out []Transaction
+	for rows.Next() {
+		var tx Transaction
+		var memo sql.NullString
+		if err := rows.Scan(&tx.ID, &tx.AccountID, &tx.AccountName, &tx.Date, &tx.Type, &tx.Category, &tx.Amount, &memo); err != nil {
+			continue
+		}
+		tx.Memo = memo.String
+		out = append(out, tx)
+	}
+	return out
 }
