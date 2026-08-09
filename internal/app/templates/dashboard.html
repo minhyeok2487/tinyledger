@@ -7,12 +7,15 @@
 <body class="page-dashboard">
 <div class="wrap">
 
+  <div data-live="topbar">
   <header class="topbar">
     <a class="nav-arrow" href="/?month={{.PrevMonth}}{{if .AccountID}}&account={{.AccountID}}{{end}}">‹</a>
     <h1>{{.Month}}{{if .IsCurrent}}<span class="tag">이번 달</span>{{end}}</h1>
     <a class="nav-arrow" href="/?month={{.NextMonth}}{{if .AccountID}}&account={{.AccountID}}{{end}}">›</a>
   </header>
+  </div>
 
+  <div data-live="balance">
   <section class="real-balance">
     <div class="rb-total">
       <span class="rb-total-label">총 잔액</span>
@@ -27,6 +30,9 @@
     {{end}}
   </section>
 
+  </div>
+
+  <div data-live="note">
   <section class="note-card" id="note-card">
     <button type="button" class="note-header" onclick="toggleNote()">
       <span class="note-icon">📌</span>
@@ -53,6 +59,9 @@
     </form>
   </section>
 
+  </div>
+
+  <div data-live="pills">
   {{if gt (len .Accounts) 1}}
   <div class="account-pills">
     <a href="/?month={{.Month}}" class="pill {{if eq .AccountID 0}}active{{end}}">전체</a>
@@ -62,6 +71,9 @@
   </div>
   {{end}}
 
+  </div>
+
+  <div data-live="summary">
   <section class="summary">
     <div class="card income">
       <div class="label">수입</div>
@@ -89,8 +101,11 @@
     {{end}}
   </section>
 
+  </div>
+
   <div class="dash-grid">
 
+    <div data-live="cats">
     {{if .Categories}}
     <section class="panel cats-panel">
       <div class="panel-title">카테고리별 지출</div>
@@ -115,6 +130,9 @@
     </section>
     {{end}}
 
+    </div>
+
+    <div data-live="add">
     <section class="panel add-panel">
       <div class="panel-title">내역 추가</div>
 
@@ -129,7 +147,7 @@
       {{end}}
 
       <form method="post" action="/add">
-        <input type="hidden" name="account_id" value="{{if .AccountID}}{{.AccountID}}{{else}}1{{end}}" id="add-account-id">
+        <input type="hidden" name="account_id" value="{{if .AccountID}}{{.AccountID}}{{else}}{{if .Accounts}}{{(index .Accounts 0).ID}}{{end}}{{end}}" id="add-account-id">
         <div class="row">
           <input type="date" name="date" required value="{{.Month}}-01">
           <select name="type" class="type-select" onchange="updateCategoryOptions(this)">
@@ -153,6 +171,9 @@
       </form>
     </section>
 
+    </div>
+
+    <div data-live="txlist">
     <section class="tx-list">
       {{range .Transactions}}
       <div class="tx {{.Type}}">
@@ -170,6 +191,7 @@
       <div class="empty">이번 달 내역이 없습니다.</div>
       {{end}}
     </section>
+    </div>
 
   </div>
 </div>
@@ -185,14 +207,18 @@ function toggleNote() {
 function toggleNoteEdit() {
   document.getElementById('note-card').classList.toggle('editing');
 }
-(function initNoteState() {
+// Called on load and again after a live swap replaces the note card, which
+// would otherwise come back collapsed.
+function applyNoteState() {
+  const card = document.getElementById('note-card');
+  if (!card) return;
   const stored = localStorage.getItem('noteExpanded');
   const shouldExpand = stored === null ? true : stored === '1';
-  if (shouldExpand) {
-    document.getElementById('note-card').classList.add('expanded');
-    document.getElementById('note-toggle').textContent = '−';
-  }
-})();
+  card.classList.toggle('expanded', shouldExpand);
+  document.getElementById('note-toggle').textContent = shouldExpand ? '−' : '＋';
+}
+applyNoteState();
+document.addEventListener('live:swap', applyNoteState);
 const expenseCats = {{.ExpenseCats}};
 const incomeCats = {{.IncomeCats}};
 function updateCategoryOptions(sel) {

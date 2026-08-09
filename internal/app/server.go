@@ -49,12 +49,17 @@ func setup() {
 		"icon":        iconFor,
 		"lines":       noteLines,
 		"notePreview": notePreview,
+		"authEnabled": authEnabled,
 	}).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /login", handleLoginPage)
+	mux.HandleFunc("POST /login", handleLogin)
+	mux.HandleFunc("POST /logout", handleLogout)
+
 	mux.HandleFunc("GET /{$}", handleDashboard)
 	mux.HandleFunc("POST /add", handleAdd)
 	mux.HandleFunc("POST /delete/{id}", handleDelete)
@@ -81,5 +86,5 @@ func setup() {
 		static.ServeHTTP(w, r)
 	}))
 
-	handler = mux
+	handler = requireAuth(mux)
 }

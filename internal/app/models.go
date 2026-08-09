@@ -59,13 +59,13 @@ type DashboardData struct {
 	UpcomingFixed    int64
 	Spendable        int64
 	AllExcluded      bool
-	Categories   []CategorySum
-	Transactions []Transaction
-	Templates    []Template
-	ExpenseCats  []string
-	IncomeCats   []string
-	Nav          string
-	Note         string
+	Categories       []CategorySum
+	Transactions     []Transaction
+	Templates        []Template
+	ExpenseCats      []string
+	IncomeCats       []string
+	Nav              string
+	Note             string
 }
 
 type CalendarDay struct {
@@ -103,21 +103,6 @@ type SearchData struct {
 	Nav          string
 }
 
-type BudgetRow struct {
-	Category string
-	Icon     string
-	Amount   int64
-}
-
-type BudgetData struct {
-	Month       string
-	PrevMonth   string
-	NextMonth   string
-	Rows        []BudgetRow
-	ExpenseCats []string
-	Nav         string
-}
-
 type TemplatesData struct {
 	Items       []Template
 	Accounts    []Account
@@ -130,4 +115,9 @@ type AccountsData struct {
 	Accounts []Account
 	Balances map[int64]int64
 	Nav      string
+}
+
+type LoginData struct {
+	Next  string
+	Error string
 }

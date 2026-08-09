@@ -34,7 +34,8 @@ func handleAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = db.Exec(`INSERT INTO transactions(account_id, date, type, category, amount, memo) VALUES (?, ?, ?, ?, ?, ?)`,
+	_, err = db.Exec(`INSERT INTO transactions(account_id, date, type, category, amount, memo)
+		VALUES (`+accountIDOrDefault+`, ?, ?, ?, ?, ?)`,
 		accountID, date, typ, category, amount, memo)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -56,9 +57,5 @@ func handleDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	redirect := r.URL.Query().Get("redirect")
-	if redirect == "" {
-		redirect = "/"
-	}
-	http.Redirect(w, r, redirect, http.StatusSeeOther)
+	http.Redirect(w, r, safeNext(r.URL.Query().Get("redirect")), http.StatusSeeOther)
 }

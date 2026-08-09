@@ -148,10 +148,10 @@ func migrateRecurringToTemplates() {
 	}
 	rows, err := db.Query(`SELECT account_id, type, category, amount, memo FROM recurring`)
 	type oldRec struct {
-		accountID      int64
-		typ, category  string
-		amount         int64
-		memo           string
+		accountID     int64
+		typ, category string
+		amount        int64
+		memo          string
 	}
 	var recs []oldRec
 	if err != nil {
@@ -198,6 +198,14 @@ func ensureColumn(table, column, def string) {
 		db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + def)
 	}
 }
+
+// accountIDOrDefault resolves an account id in SQL, falling back to the first
+// existing account. Without it a stale id (e.g. the hardcoded 1 after that
+// account was deleted) would insert a row that joins to nothing and becomes
+// invisible everywhere.
+const accountIDOrDefault = `COALESCE(
+	(SELECT id FROM accounts WHERE id = ?),
+	(SELECT id FROM accounts ORDER BY sort_order, id LIMIT 1))`
 
 func listAccounts() ([]Account, error) {
 	rows, err := db.Query(`SELECT id, name, icon, balance, COALESCE(excluded,0) FROM accounts ORDER BY sort_order, id`)

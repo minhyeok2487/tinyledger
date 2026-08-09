@@ -10,19 +10,93 @@
 
 {{define "scripts"}}
 <script>
-// Every write in this app is a full form POST + redirect, so without feedback
-// a click looks like nothing happened. One delegated listener marks the
-// submitting form busy; CSS turns its button into a spinner.
+// Writes are plain form POSTs. Where the page marks its regions with
+// data-live, we send the POST with fetch and swap only those regions in from
+// the response, so the page never reloads: scroll position, the note's
+// expanded state and focus all survive. Everything still works with JS off —
+// the same forms just submit normally.
 (function () {
   var TIMEOUT = 15000;
-  var timer = null;
+  var LIVE = '[data-live]';
+  var timers = new WeakMap();
+
+  function releaseForm(form) {
+    clearTimeout(timers.get(form));
+    timers.delete(form);
+    form.classList.remove('busy');
+    form.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; });
+    // The progress bar belongs to the page, so only the last one out clears it.
+    if (!document.querySelector('form.busy')) {
+      document.documentElement.classList.remove('nav-busy');
+    }
+  }
 
   function clearBusy() {
-    clearTimeout(timer);
+    document.querySelectorAll('form.busy').forEach(releaseForm);
     document.documentElement.classList.remove('nav-busy');
-    document.querySelectorAll('form.busy').forEach(function (f) {
-      f.classList.remove('busy');
-      f.querySelectorAll('button[disabled]').forEach(function (b) { b.disabled = false; });
+  }
+
+  function markBusy(form) {
+    form.classList.add('busy');
+    document.documentElement.classList.add('nav-busy');
+    // Deferred so the button's own name/value still makes it into the POST.
+    setTimeout(function () {
+      var btn = form.querySelector('button[type=submit], button:not([type])');
+      if (btn) btn.disabled = true;
+    }, 0);
+    timers.set(form, setTimeout(function () { releaseForm(form); }, TIMEOUT));
+  }
+
+  // Replaces each data-live region with its counterpart from html.
+  // Returns false when the response has no regions — a login page, say —
+  // which means the caller should navigate instead.
+  function swapLive(html) {
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    var incoming = doc.querySelectorAll(LIVE);
+    if (!incoming.length) return false;
+    var swapped = 0;
+    incoming.forEach(function (nextEl) {
+      var key = nextEl.getAttribute('data-live');
+      var current = document.querySelector('[data-live="' + CSS.escape(key) + '"]');
+      if (current) { current.replaceWith(nextEl); swapped++; }
+    });
+    if (!swapped) return false;
+    document.dispatchEvent(new CustomEvent('live:swap'));
+    return true;
+  }
+
+  function liveSubmit(form) {
+    var focused = document.activeElement;
+    var focusedName = focused && focused.form === form ? focused.name : null;
+
+    fetch(form.action, {
+      method: 'POST',
+      // URLSearchParams, not FormData: the handlers call r.ParseForm(), which
+      // reads urlencoded bodies only — a multipart body would arrive empty.
+      body: new URLSearchParams(new FormData(form)),
+      credentials: 'same-origin',
+    }).then(function (res) {
+      if (res.status === 401) {
+        window.location.href = '/login?next=' + encodeURIComponent(location.pathname + location.search);
+        return null;
+      }
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.text().then(function (html) { return { html: html, url: res.url }; });
+    }).then(function (result) {
+      if (!result) return;
+      if (!swapLive(result.html)) { window.location.href = result.url; return; }
+      // The POST may have redirected to a different month than the one on
+      // screen; keep the address bar honest so a refresh shows the same thing.
+      if (result.url) history.replaceState(null, '', result.url);
+      releaseForm(form);
+      clearBusy(); // the swap may have replaced the form node itself
+      if (focusedName) {
+        var again = document.querySelector('[name="' + CSS.escape(focusedName) + '"]');
+        if (again) again.focus();
+      }
+    }).catch(function () {
+      // Don't resubmit — the write may well have landed. Reload to show truth.
+      window.location.reload();
     });
   }
 
@@ -35,14 +109,14 @@
     if (!(form instanceof HTMLFormElement)) return;
     if (form.classList.contains('busy')) { e.preventDefault(); return; }
 
-    form.classList.add('busy');
-    document.documentElement.classList.add('nav-busy');
-    // Deferred so the button's own name/value still makes it into the POST.
-    setTimeout(function () {
-      var btn = form.querySelector('button[type=submit], button:not([type])');
-      if (btn) btn.disabled = true;
-    }, 0);
-    timer = setTimeout(clearBusy, TIMEOUT);
+    markBusy(form);
+
+    var live = form.method.toLowerCase() === 'post' &&
+      document.querySelector(LIVE) &&
+      window.fetch && window.DOMParser && window.CSS && CSS.escape;
+    if (!live) return; // fall through to a normal navigation
+    e.preventDefault();
+    liveSubmit(form);
   });
 
   // Back button restoring the page from bfcache would otherwise show a

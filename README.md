@@ -111,6 +111,24 @@ Vercel은 서버리스 구조라 지금의 `net/http.ListenAndServe` 상시 서�
 | `GAGYEBU_DB` | 로컬 SQLite 파일 경로 (Turso 미설정 시) | `gagyebu.db` |
 | `TURSO_DATABASE_URL` | Turso DB URL (설정 시 로컬 DB 대신 사용) | - |
 | `TURSO_AUTH_TOKEN` | Turso 인증 토큰 | - |
+| `GAGYEBU_PASSWORD` | 접속 비밀번호 (배포 시 필수) | - |
+
+## 비밀번호 잠금
+
+`GAGYEBU_PASSWORD`를 설정하면 모든 화면이 로그인 뒤로 숨겨집니다. 로그인하면
+서명된 세션 쿠키가 30일간 유지되고, 계좌 화면 하단의 로그아웃 버튼으로 해제할
+수 있습니다. 비밀번호를 바꾸면 기존 세션은 모두 무효가 됩니다.
+
+로컬 개발에서는 값을 비워두면 잠금 없이 동작합니다. 다만 **Vercel에서는 값이
+없으면 503으로 응답을 거부**합니다 — 환경변수를 깜빡한 배포가 가계부를 공개
+상태로 노출하지 않도록 하기 위한 동작입니다.
+
+```bash
+GAGYEBU_PASSWORD='원하는-비밀번호' PORT=3000 go run .
+```
+
+Vercel에서는 프로젝트 설정 → Environment Variables에 `GAGYEBU_PASSWORD`를
+추가한 뒤 재배포하면 됩니다.
 
 ## 라이선스
 
