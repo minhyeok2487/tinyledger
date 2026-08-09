@@ -104,6 +104,18 @@ func currentMonth() string {
 	return time.Now().Format("2006-01")
 }
 
+// monthRange turns "2006-01" into the half-open date bounds [start, end),
+// so queries can compare the indexed date column directly instead of
+// wrapping it in substr(), which would prevent an index scan.
+func monthRange(month string) (string, string) {
+	t, err := time.Parse("2006-01", month)
+	if err != nil {
+		t = time.Now()
+	}
+	t = time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
+	return t.Format("2006-01-02"), t.AddDate(0, 1, 0).Format("2006-01-02")
+}
+
 func shiftMonth(month string, delta int) string {
 	t, err := time.Parse("2006-01", month)
 	if err != nil {

@@ -75,7 +75,11 @@ func setup() {
 
 	mux.HandleFunc("POST /notes", handleNoteSave)
 
-	mux.Handle("GET /static/", http.FileServerFS(staticFS))
+	static := http.FileServerFS(staticFS)
+	mux.Handle("GET /static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		static.ServeHTTP(w, r)
+	}))
 
 	handler = mux
 }

@@ -3,6 +3,8 @@ package app
 import (
 	"database/sql"
 	"log"
+	"os"
+	"time"
 )
 
 var db *sql.DB
@@ -23,7 +25,17 @@ func initTursoDB(url, token string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	setupSchema()
+	db.SetMaxOpenConns(8)
+	db.SetMaxIdleConns(8)
+	db.SetConnMaxIdleTime(5 * time.Minute)
+	db.SetConnMaxLifetime(30 * time.Minute)
+
+	// setupSchema costs a dozen sequential round trips to the remote database,
+	// which every serverless cold start would otherwise pay before serving a
+	// byte. The schema is already in place there, so only run it when asked.
+	if os.Getenv("VERCEL") == "" || os.Getenv("RUN_MIGRATIONS") == "1" {
+		setupSchema()
+	}
 	log.Println("Turso DB 연결:", url)
 }
 

@@ -17,8 +17,9 @@ func handleCalendar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	daily := map[string][2]int64{} // date -> [income, expense]
-	query := `SELECT date, type, SUM(amount) FROM transactions WHERE substr(date,1,7) = ?`
-	args := []any{month}
+	monthStart, monthEnd := monthRange(month)
+	query := `SELECT date, type, SUM(amount) FROM transactions WHERE date >= ? AND date < ?`
+	args := []any{monthStart, monthEnd}
 	if accountID > 0 {
 		query += ` AND account_id = ?`
 		args = append(args, accountID)

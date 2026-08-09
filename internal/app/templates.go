@@ -1,6 +1,7 @@
 package app
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 )
@@ -54,15 +55,36 @@ func handleTemplateDelete(w http.ResponseWriter, r *http.Request) {
 // transaction (same type/category/amount/memo) logged in the given month.
 func unspentTemplates(month string) []Template {
 	all := listTemplates()
+	if len(all) == 0 {
+		return nil
+	}
+
+	monthStart, monthEnd := monthRange(month)
+	spent := map[string]bool{}
+	rows, err := db.Query(`SELECT type, category, amount, COALESCE(memo,'') FROM transactions
+		WHERE date >= ? AND date < ?`, monthStart, monthEnd)
+	if err != nil {
+		log.Println(err)
+		return all
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var typ, category, memo string
+		var amount int64
+		if rows.Scan(&typ, &category, &amount, &memo) == nil {
+			spent[templateKey(typ, category, amount, memo)] = true
+		}
+	}
+
 	var out []Template
 	for _, t := range all {
-		var count int
-		db.QueryRow(`SELECT COUNT(*) FROM transactions
-			WHERE substr(date,1,7) = ? AND type = ? AND category = ? AND amount = ? AND memo = ?`,
-			month, t.Type, t.Category, t.Amount, t.Memo).Scan(&count)
-		if count == 0 {
+		if !spent[templateKey(t.Type, t.Category, t.Amount, t.Memo)] {
 			out = append(out, t)
 		}
 	}
 	return out
+}
+
+func templateKey(typ, category string, amount int64, memo string) string {
+	return typ + "\x00" + category + "\x00" + strconv.FormatInt(amount, 10) + "\x00" + memo
 }

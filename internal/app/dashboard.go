@@ -56,10 +56,11 @@ func buildDashboard(month string, accountID int64) DashboardData {
 		brows.Close()
 	}
 
+	monthStart, monthEnd := monthRange(month)
 	query := `SELECT t.id, t.account_id, a.name, t.date, t.type, t.category, t.amount, t.memo
 		FROM transactions t JOIN accounts a ON a.id = t.account_id
-		WHERE substr(t.date,1,7) = ?`
-	args := []any{month}
+		WHERE t.date >= ? AND t.date < ?`
+	args := []any{monthStart, monthEnd}
 	if accountID > 0 {
 		query += ` AND t.account_id = ?`
 		args = append(args, accountID)
