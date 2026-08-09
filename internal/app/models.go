@@ -131,3 +131,8 @@ type AccountsData struct {
 	Balances map[int64]int64
 	Nav      string
 }
+
+type LoginData struct {
+	Next  string
+	Error string
+}

@@ -64,6 +64,12 @@
     </form>
   </section>
 
+  {{if authEnabled}}
+  <form method="post" action="/logout" class="logout-form">
+    <button type="submit" class="logout-btn">로그아웃</button>
+  </form>
+  {{end}}
+
 </div>
 {{template "nav" .}}
 {{template "scripts" .}}

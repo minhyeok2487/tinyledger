@@ -706,3 +706,39 @@ html.nav-busy::before {
   z-index: 999;
   animation: tl-progress 8s cubic-bezier(0.1, 0.6, 0.2, 1) forwards;
 }
+
+/* ---------- login ---------- */
+.login-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+}
+.login-panel { width: 100%; max-width: 320px; }
+.login-title {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+.login-panel form { display: flex; flex-direction: column; gap: 10px; }
+.login-panel input[type=password] { width: 100%; }
+.login-error {
+  background: var(--card-hi);
+  border: 1px solid var(--expense);
+  color: var(--expense);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  margin-bottom: 10px;
+  text-align: center;
+}
+.logout-form { margin: 4px 0 12px; text-align: center; }
+.logout-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 10px;
+  padding: 7px 16px;
+  font-size: 12.5px;
+}

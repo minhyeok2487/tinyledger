@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ko">
+<head>
+{{template "head" .}}
+<title>가계부 · 로그인</title>
+</head>
+<body class="page-login">
+<div class="wrap login-wrap">
+
+  <section class="panel login-panel">
+    <div class="login-title">🔒 가계부</div>
+    {{if .Error}}<div class="login-error">{{.Error}}</div>{{end}}
+    <form method="post" action="/login">
+      <input type="hidden" name="next" value="{{.Next}}">
+      <input type="password" name="password" placeholder="비밀번호" autocomplete="current-password" autofocus required>
+      <button type="submit" class="btn-primary">로그인</button>
+    </form>
+  </section>
+
+</div>
+{{template "scripts" .}}
+</body>
+</html>
