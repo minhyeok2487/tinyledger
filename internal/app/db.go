@@ -148,10 +148,10 @@ func migrateRecurringToTemplates() {
 	}
 	rows, err := db.Query(`SELECT account_id, type, category, amount, memo FROM recurring`)
 	type oldRec struct {
-		accountID      int64
-		typ, category  string
-		amount         int64
-		memo           string
+		accountID     int64
+		typ, category string
+		amount        int64
+		memo          string
 	}
 	var recs []oldRec
 	if err != nil {

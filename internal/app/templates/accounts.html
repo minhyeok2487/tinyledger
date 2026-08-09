@@ -11,6 +11,7 @@
     <h1>계좌</h1>
   </header>
 
+  <div data-live="accounts">
   <section class="tx-list accounts-list">
     {{range .Accounts}}
     <div class="tx account-row">
@@ -63,6 +64,8 @@
       </div>
     </form>
   </section>
+
+  </div>
 
   {{if authEnabled}}
   <form method="post" action="/logout" class="logout-form">
