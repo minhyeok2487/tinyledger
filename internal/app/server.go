@@ -124,6 +124,9 @@ func setup() {
 	mux.HandleFunc("POST /timetable/unschedule/{id}", handleUnschedule)
 	mux.HandleFunc("POST /timetable/edit/{id}", handleTaskEdit)
 	mux.HandleFunc("POST /timetable/delete/{id}", handleTaskDelete)
+	mux.HandleFunc("POST /timetable/categories/add", handleCategoryAdd)
+	mux.HandleFunc("POST /timetable/categories/rename/{id}", handleCategoryRename)
+	mux.HandleFunc("POST /timetable/categories/delete/{id}", handleCategoryDelete)
 
 	mux.HandleFunc("POST /notes", handleNoteSave)
 

@@ -236,6 +236,14 @@ func (t Task) Duration() string  { return fmtDuration(int(t.EndMin - t.StartMin)
 func (t Task) StartHHMM() string { return minToHHMM(t.StartMin) }
 func (t Task) EndHHMM() string   { return minToHHMM(t.EndMin) }
 
+// TaskCategory is a user-managed label offered in the task edit modal's
+// category <select> — separate from Task.Category (a free-text copy), so
+// renaming/deleting one here doesn't rewrite existing tasks.
+type TaskCategory struct {
+	ID   int64
+	Name string
+}
+
 type TimetableData struct {
 	Date, PrevDate, NextDate, TodayDate string
 	IsToday                             bool
@@ -243,5 +251,6 @@ type TimetableData struct {
 	DawnBlocks, MainBlocks              []Task // Scheduled, split at 06:00 to match the collapsible dawn section
 	TotalBlocks                         int
 	DawnHours, DayHours                 []int
+	Categories                          []TaskCategory
 	Nav                                 string
 }

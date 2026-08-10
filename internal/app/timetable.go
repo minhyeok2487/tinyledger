@@ -53,6 +53,12 @@ func handleTimetable(w http.ResponseWriter, r *http.Request) {
 		dayHours[i] = i + 6
 	}
 
+	categories, err := listCategories()
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
 	data := TimetableData{
 		Date:        date,
 		PrevDate:    shiftDate(date, -1),
@@ -66,6 +72,7 @@ func handleTimetable(w http.ResponseWriter, r *http.Request) {
 		DawnBlocks:  dawnBlocks,
 		MainBlocks:  mainBlocks,
 		TotalBlocks: len(dawnBlocks) + len(mainBlocks),
+		Categories:  categories,
 		Nav:         "timetable",
 	}
 	if err := tpl.ExecuteTemplate(w, "timetable.html", data); err != nil {
@@ -354,5 +361,61 @@ func handleTaskEdit(w http.ResponseWriter, r *http.Request) {
 
 func handleTaskDelete(w http.ResponseWriter, r *http.Request) {
 	db.Exec(`DELETE FROM tasks WHERE id = ?`, r.PathValue("id"))
+	http.Redirect(w, r, timetableRedirect(r), http.StatusSeeOther)
+}
+
+func listCategories() ([]TaskCategory, error) {
+	rows, err := db.Query(`SELECT id, name FROM task_categories ORDER BY sort_order, id`)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []TaskCategory
+	for rows.Next() {
+		var c TaskCategory
+		if rows.Scan(&c.ID, &c.Name) == nil {
+			out = append(out, c)
+		}
+	}
+	return out, rows.Err()
+}
+
+func handleCategoryAdd(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	if name := strings.TrimSpace(r.FormValue("name")); name != "" {
+		if _, err := db.Exec(`INSERT INTO task_categories(name, sort_order)
+			VALUES (?, (SELECT COALESCE(MAX(sort_order),-1)+1 FROM task_categories))
+			ON CONFLICT(name) DO NOTHING`, name); err != nil {
+			log.Println("category add:", err)
+		}
+	}
+	http.Redirect(w, r, timetableRedirect(r), http.StatusSeeOther)
+}
+
+func handleCategoryRename(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	if name := strings.TrimSpace(r.FormValue("name")); name != "" {
+		// A clash with an existing name is rejected by the UNIQUE index; log
+		// it rather than pretending the rename happened.
+		if _, err := db.Exec(`UPDATE task_categories SET name = ? WHERE id = ?`, name, r.PathValue("id")); err != nil {
+			log.Println("category rename:", err)
+		}
+	}
+	http.Redirect(w, r, timetableRedirect(r), http.StatusSeeOther)
+}
+
+// handleCategoryDelete only removes the managed label — tasks that already
+// carry it in their (free-text) category column are left untouched, same as
+// a hobby item rename doesn't rewrite past transactions.
+func handleCategoryDelete(w http.ResponseWriter, r *http.Request) {
+	db.Exec(`DELETE FROM task_categories WHERE id = ?`, r.PathValue("id"))
 	http.Redirect(w, r, timetableRedirect(r), http.StatusSeeOther)
 }
