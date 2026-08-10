@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 const hobbyCategory = "여가"
@@ -97,14 +98,16 @@ func groupHobby(txs []hobbyTx) ([]HobbyGroup, int64) {
 	byItem := map[int64]*HobbyGroup{}
 	var total int64
 	for _, t := range txs {
-		g := byItem[t.ItemID]
+		// A row pointing at an item that no longer exists joins to an empty
+		// name; treat it as unclassified so it stays fixable from the UI.
+		itemID, name := t.ItemID, t.ItemName
+		if name == "" {
+			itemID, name = 0, "미분류"
+		}
+		g := byItem[itemID]
 		if g == nil {
-			name := t.ItemName
-			if t.ItemID == 0 {
-				name = "미분류"
-			}
-			g = &HobbyGroup{ItemID: t.ItemID, Name: name, Archived: t.Archived}
-			byItem[t.ItemID] = g
+			g = &HobbyGroup{ItemID: itemID, Name: name, Archived: t.Archived}
+			byItem[itemID] = g
 		}
 		g.Total += t.Amount
 		g.Txs = append(g.Txs, t.Transaction)
@@ -172,9 +175,14 @@ func handleHobbyItemAdd(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 400)
 		return
 	}
-	if name := r.FormValue("name"); name != "" {
-		db.Exec(`INSERT OR IGNORE INTO hobby_items(name, sort_order)
-			VALUES (?, (SELECT COALESCE(MAX(sort_order),-1)+1 FROM hobby_items))`, name)
+	// Re-adding a name that was archived brings it back, rather than looking
+	// like the add silently failed.
+	if name := strings.TrimSpace(r.FormValue("name")); name != "" {
+		if _, err := db.Exec(`INSERT INTO hobby_items(name, sort_order)
+			VALUES (?, (SELECT COALESCE(MAX(sort_order),-1)+1 FROM hobby_items))
+			ON CONFLICT(name) DO UPDATE SET archived = 0`, name); err != nil {
+			log.Println("hobby item add:", err)
+		}
 	}
 	http.Redirect(w, r, hobbyRedirect(r), http.StatusSeeOther)
 }
@@ -184,8 +192,12 @@ func handleHobbyItemRename(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 400)
 		return
 	}
-	if name := r.FormValue("name"); name != "" {
-		db.Exec(`UPDATE hobby_items SET name = ? WHERE id = ?`, name, r.PathValue("id"))
+	if name := strings.TrimSpace(r.FormValue("name")); name != "" {
+		// A clash with an existing name is rejected by the UNIQUE index; log
+		// it rather than pretending the rename happened.
+		if _, err := db.Exec(`UPDATE hobby_items SET name = ? WHERE id = ?`, name, r.PathValue("id")); err != nil {
+			log.Println("hobby item rename:", err)
+		}
 	}
 	http.Redirect(w, r, hobbyRedirect(r), http.StatusSeeOther)
 }
@@ -216,7 +228,9 @@ func handleHobbyAssign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	itemID, _ := strconv.ParseInt(r.FormValue("item_id"), 10, 64)
-	db.Exec(`UPDATE transactions SET hobby_item_id = NULLIF(?,0)
+	// Resolve the id against the table: an unknown one must land as NULL
+	// (미분류) rather than creating a nameless bucket nothing can clean up.
+	db.Exec(`UPDATE transactions SET hobby_item_id = `+hobbyItemOrNull+`
 		WHERE id = ? AND category = ?`, itemID, r.PathValue("id"), hobbyCategory)
 	http.Redirect(w, r, hobbyRedirect(r), http.StatusSeeOther)
 }

@@ -2,6 +2,7 @@ package app
 
 import (
 	"database/sql"
+	"errors"
 	"log"
 	"net/http"
 	"net/url"
@@ -184,17 +185,24 @@ func handleWishBuy(w http.ResponseWriter, r *http.Request) {
 	if category != hobbyCategory {
 		hobbyItemID = 0
 	}
+	// A far-future date would park the expense in a month no view reaches,
+	// so anything unparseable or ahead of today falls back to today.
+	today := time.Now().Format("2006-01-02")
 	date := r.FormValue("date")
-	if _, dErr := time.Parse("2006-01-02", date); dErr != nil {
-		date = time.Now().Format("2006-01-02")
+	if _, dErr := time.Parse("2006-01-02", date); dErr != nil || date > today {
+		date = today
 	}
 
-	if err := buyWishItem(id, name, date, category, amount, accountID, hobbyItemID); err != nil {
+	if err := buyWishItem(id, name, date, category, amount, accountID, hobbyItemID); err != nil &&
+		!errors.Is(err, errAlreadyBought) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 	http.Redirect(w, r, "/wishlist", http.StatusSeeOther)
 }
+
+// errAlreadyBought means another request got there first.
+var errAlreadyBought = errors.New("already bought")
 
 func buyWishItem(id, name, date, category string, amount, accountID, hobbyItemID int64) error {
 	tx, err := db.Begin()
@@ -203,12 +211,25 @@ func buyWishItem(id, name, date, category string, amount, accountID, hobbyItemID
 	}
 	defer tx.Rollback()
 
+	// Claim the row first, and only if it is still unbought. Checking before
+	// the transaction and updating unconditionally let two concurrent submits
+	// both pass the check and both write an expense — a double-tap on 구매함
+	// silently doubled the spending. The UPDATE is the lock: whoever changes
+	// zero rows loses and writes nothing.
+	res, err := tx.Exec(`UPDATE wishlist SET bought_at = ?
+		WHERE id = ? AND (bought_at IS NULL OR bought_at = '')`, date, id)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return errAlreadyBought
+	}
+
 	if _, err := tx.Exec(`INSERT INTO transactions(account_id, date, type, category, amount, memo, hobby_item_id)
 		VALUES (`+accountIDOrDefault+`, ?, 'expense', ?, ?, ?, `+hobbyItemOrNull+`)`,
 		accountID, date, category, amount, name, hobbyItemID); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(`UPDATE wishlist SET bought_at = ? WHERE id = ?`, date, id); err != nil {
 		return err
 	}
 	return tx.Commit()
