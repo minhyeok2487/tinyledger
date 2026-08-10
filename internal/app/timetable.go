@@ -76,7 +76,7 @@ func handleTimetable(w http.ResponseWriter, r *http.Request) {
 func listTasks(date string) ([]Task, error) {
 	rows, err := db.Query(`SELECT id, title, note, date,
 			COALESCE(today_order,0), COALESCE(start_min,-1), COALESCE(end_min,-1),
-			color, done, sort_order
+			color, done, sort_order, category, deadline
 		FROM tasks WHERE date = ? ORDER BY sort_order, id`, date)
 	if err != nil {
 		log.Println(err)
@@ -89,7 +89,8 @@ func listTasks(date string) ([]Task, error) {
 		var t Task
 		var note sql.NullString
 		if err := rows.Scan(&t.ID, &t.Title, &note, &t.Date,
-			&t.TodayOrder, &t.StartMin, &t.EndMin, &t.Color, &t.Done, &t.SortOrder); err != nil {
+			&t.TodayOrder, &t.StartMin, &t.EndMin, &t.Color, &t.Done, &t.SortOrder,
+			&t.Category, &t.Deadline); err != nil {
 			continue
 		}
 		t.Note = note.String
@@ -310,13 +311,24 @@ func handleTaskEdit(w http.ResponseWriter, r *http.Request) {
 	if color < 0 || color >= taskColors {
 		color = 0
 	}
+	category := strings.TrimSpace(r.FormValue("category"))
+
+	// Deadline is optional — a blank field just clears it. When present it
+	// must still be a real date, same as the time fields below.
+	deadline := r.FormValue("deadline")
+	if deadline != "" {
+		if _, err := time.Parse("2006-01-02", deadline); err != nil {
+			http.Error(w, "invalid deadline", 400)
+			return
+		}
+	}
 
 	// The modal uses <input type=time>, which posts "HH:MM" — distinct from
 	// handleSchedule's raw-minute integers, which come from the drag JS.
 	startStr, endStr := r.FormValue("start_min"), r.FormValue("end_min")
 	if startStr == "" || endStr == "" {
-		db.Exec(`UPDATE tasks SET title = ?, note = ?, color = ?, start_min = NULL, end_min = NULL WHERE id = ?`,
-			title, note, color, id)
+		db.Exec(`UPDATE tasks SET title = ?, note = ?, color = ?, category = ?, deadline = ?, start_min = NULL, end_min = NULL WHERE id = ?`,
+			title, note, color, category, deadline, id)
 	} else {
 		start, err1 := time.Parse("15:04", startStr)
 		end, err2 := time.Parse("15:04", endStr)
@@ -325,8 +337,8 @@ func handleTaskEdit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		startMin, endMin := clampSchedule(start.Hour()*60+start.Minute(), end.Hour()*60+end.Minute())
-		db.Exec(`UPDATE tasks SET title = ?, note = ?, color = ?, start_min = ?, end_min = ? WHERE id = ?`,
-			title, note, color, startMin, endMin, id)
+		db.Exec(`UPDATE tasks SET title = ?, note = ?, color = ?, category = ?, deadline = ?, start_min = ?, end_min = ? WHERE id = ?`,
+			title, note, color, category, deadline, startMin, endMin, id)
 	}
 
 	// "오늘의 계획에 추가" checkbox — the modal's non-drag path to the same

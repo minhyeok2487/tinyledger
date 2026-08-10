@@ -193,9 +193,36 @@ type Task struct {
 	Color      int
 	Done       bool
 	SortOrder  int
+	Category   string // free-text tag, "" = none
+	Deadline   string // "2006-01-02", "" = no deadline (optional)
 }
 
-func (t Task) Scheduled() bool { return t.StartMin >= 0 }
+func (t Task) Scheduled() bool   { return t.StartMin >= 0 }
+func (t Task) HasDeadline() bool { return t.Deadline != "" }
+
+// DdayLabel renders the task's deadline as a D-day badge ("D-3", "D-DAY",
+// "D+2"), or "" when there is no deadline — the field is optional, so most
+// tasks show no badge at all.
+func (t Task) DdayLabel() string { return ddayLabel(t.Deadline) }
+
+// DdayClass picks a CSS modifier so overdue/due-today deadlines stand out
+// from ordinary upcoming ones.
+func (t Task) DdayClass() string {
+	if t.Deadline == "" {
+		return ""
+	}
+	days, ok := daysUntil(t.Deadline)
+	switch {
+	case !ok:
+		return ""
+	case days < 0:
+		return "tt-dday-over"
+	case days == 0:
+		return "tt-dday-today"
+	default:
+		return ""
+	}
+}
 
 // TopPx/HeightPx let the template position a block without any JS — the
 // grid is correct even before scripts run. 1 minute = 1px, matching the

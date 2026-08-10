@@ -104,6 +104,60 @@ func TestClampSchedule(t *testing.T) {
 	}
 }
 
+func TestDdayLabel(t *testing.T) {
+	today := currentDate()
+	tests := []struct {
+		name     string
+		deadline string
+		want     string
+	}{
+		{"no deadline", "", ""},
+		{"due today", today, "D-DAY"},
+		{"3 days out", shiftDate(today, 3), "D-3"},
+		{"2 days overdue", shiftDate(today, -2), "D+2"},
+		{"garbage input", "not-a-date", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ddayLabel(tt.deadline); got != tt.want {
+				t.Errorf("ddayLabel(%q) = %q, want %q", tt.deadline, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTaskDdayHelpers(t *testing.T) {
+	today := currentDate()
+	noDeadline := Task{Deadline: ""}
+	if noDeadline.HasDeadline() {
+		t.Error("empty deadline should report HasDeadline() == false")
+	}
+	if got := noDeadline.DdayClass(); got != "" {
+		t.Errorf("DdayClass() on empty deadline = %q, want empty", got)
+	}
+
+	dueToday := Task{Deadline: today}
+	if !dueToday.HasDeadline() {
+		t.Error("non-empty deadline should report HasDeadline() == true")
+	}
+	if got := dueToday.DdayClass(); got != "tt-dday-today" {
+		t.Errorf("DdayClass() due today = %q, want tt-dday-today", got)
+	}
+
+	overdue := Task{Deadline: shiftDate(today, -1)}
+	if got := overdue.DdayClass(); got != "tt-dday-over" {
+		t.Errorf("DdayClass() overdue = %q, want tt-dday-over", got)
+	}
+
+	upcoming := Task{Deadline: shiftDate(today, 1)}
+	if got := upcoming.DdayClass(); got != "" {
+		t.Errorf("DdayClass() upcoming = %q, want empty", got)
+	}
+	if got := upcoming.DdayLabel(); got != "D-1" {
+		t.Errorf("DdayLabel() upcoming = %q, want D-1", got)
+	}
+}
+
 func TestTaskScheduledAndPositioning(t *testing.T) {
 	unscheduled := Task{StartMin: -1, EndMin: -1}
 	if unscheduled.Scheduled() {

@@ -191,6 +191,35 @@ func shiftMonth(month string, delta int) string {
 	return t.AddDate(0, delta, 0).Format("2006-01")
 }
 
+// daysUntil returns the whole-day gap between today and a "2006-01-02"
+// deadline: positive when it's still ahead, 0 when due today, negative once
+// overdue. ok is false for an unparsable deadline.
+func daysUntil(deadline string) (days int, ok bool) {
+	d, err := time.Parse("2006-01-02", deadline)
+	if err != nil {
+		return 0, false
+	}
+	t, _ := time.Parse("2006-01-02", currentDate())
+	return int(d.Sub(t).Hours() / 24), true
+}
+
+// ddayLabel renders a deadline as a D-day badge relative to today. Returns
+// "" for an empty or unparsable deadline, since the field is optional.
+func ddayLabel(deadline string) string {
+	days, ok := daysUntil(deadline)
+	if !ok {
+		return ""
+	}
+	switch {
+	case days == 0:
+		return "D-DAY"
+	case days > 0:
+		return fmt.Sprintf("D-%d", days)
+	default:
+		return fmt.Sprintf("D+%d", -days)
+	}
+}
+
 func isExpenseCategory(c string) bool {
 	for _, e := range expenseCategories {
 		if e == c {

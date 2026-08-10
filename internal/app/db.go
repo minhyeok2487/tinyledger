@@ -157,6 +157,8 @@ func setupSchema() {
 	ensureColumn("accounts", "balance", "INTEGER NOT NULL DEFAULT 0")
 	ensureColumn("accounts", "excluded", "INTEGER NOT NULL DEFAULT 0")
 	ensureColumn("transactions", "hobby_item_id", "INTEGER")
+	ensureColumn("tasks", "category", "TEXT NOT NULL DEFAULT ''")
+	ensureColumn("tasks", "deadline", "TEXT NOT NULL DEFAULT ''")
 	// Created after the column exists, so it can't run inside the stmts list.
 	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_tx_hobby ON transactions(hobby_item_id)`); err != nil {
 		log.Println("idx_tx_hobby:", err)
