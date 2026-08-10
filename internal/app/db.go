@@ -48,7 +48,7 @@ func initTursoDB(url, token string) {
 
 // schemaVersion is bumped whenever setupSchema gains a table, column, or
 // migration, so remote databases pick the change up on their next cold start.
-const schemaVersion = 4
+const schemaVersion = 5
 
 func schemaCurrent() bool {
 	var v int
