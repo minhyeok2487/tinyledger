@@ -50,6 +50,7 @@ func setup() {
 		"lines":       noteLines,
 		"notePreview": notePreview,
 		"authEnabled": authEnabled,
+		"add1":        func(i int) int { return i + 1 },
 	}).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		log.Fatal(err)
@@ -90,6 +91,17 @@ func setup() {
 	mux.HandleFunc("POST /wishlist/update/{id}", handleWishUpdate)
 	mux.HandleFunc("POST /wishlist/delete/{id}", handleWishDelete)
 	mux.HandleFunc("POST /wishlist/buy/{id}", handleWishBuy)
+
+	mux.HandleFunc("GET /timetable", handleTimetable)
+	mux.HandleFunc("POST /timetable/dump/add", handleDumpAdd)
+	mux.HandleFunc("POST /timetable/dump/delete/{id}", handleDumpDelete)
+	mux.HandleFunc("POST /timetable/today/set/{id}", handleTodaySet)
+	mux.HandleFunc("POST /timetable/today/unset/{id}", handleTodayUnset)
+	mux.HandleFunc("POST /timetable/today/toggle/{id}", handleTodayToggle)
+	mux.HandleFunc("POST /timetable/schedule/{id}", handleSchedule)
+	mux.HandleFunc("POST /timetable/unschedule/{id}", handleUnschedule)
+	mux.HandleFunc("POST /timetable/edit/{id}", handleTaskEdit)
+	mux.HandleFunc("POST /timetable/delete/{id}", handleTaskDelete)
 
 	mux.HandleFunc("POST /notes", handleNoteSave)
 

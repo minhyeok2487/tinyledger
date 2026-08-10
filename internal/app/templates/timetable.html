@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="ko">
+<head>
+{{template "head" .}}
+<title>가계부 · 일정</title>
+</head>
+<body class="page-timetable">
+<div class="wrap">
+  <div data-live="timetable">
+
+  <header class="topbar">
+    <a class="nav-arrow" href="/timetable?date={{.PrevDate}}">‹</a>
+    <h1>{{.Date}}{{if .IsToday}}<span class="tag">오늘</span>{{end}}</h1>
+    <a class="nav-arrow" href="/timetable?date={{.NextDate}}">›</a>
+  </header>
+  {{if not .IsToday}}
+  <div class="account-pills">
+    <a href="/timetable?date={{.TodayDate}}" class="pill">오늘로</a>
+  </div>
+  {{end}}
+
+  <section class="panel tt-today">
+    <div class="panel-title">오늘의 계획 {{len .Planned}}/5</div>
+    {{if .Planned}}
+    <div class="tt-today-list" id="today-list">
+      {{range $i, $t := .Planned}}
+      <div class="tt-today-row">
+        <span class="tt-today-num">{{printf "%02d" (add1 $i)}}</span>
+        <form method="post" action="/timetable/today/toggle/{{$t.ID}}" class="tt-check-form">
+          <input type="hidden" name="date" value="{{$.Date}}">
+          <input type="checkbox" {{if $t.Done}}checked{{end}} onchange="this.form.requestSubmit()">
+          <noscript><button type="submit">저장</button></noscript>
+        </form>
+        <span class="tt-today-title {{if $t.Done}}done{{end}}">{{$t.Title}}</span>
+        <button type="button" class="tt-edit-btn" title="수정" onclick="openTaskModal(this)"
+          data-id="{{$t.ID}}" data-title="{{$t.Title}}" data-note="{{$t.Note}}" data-color="{{$t.Color}}"
+          {{if $t.Scheduled}}data-start="{{$t.StartHHMM}}" data-end="{{$t.EndHHMM}}"{{end}}
+          data-today="1" data-date="{{$.Date}}">✎</button>
+        <form method="post" action="/timetable/today/unset/{{$t.ID}}" class="tx-del">
+          <input type="hidden" name="date" value="{{$.Date}}">
+          <button type="submit" title="오늘의 계획에서 빼기">×</button>
+        </form>
+      </div>
+      {{end}}
+    </div>
+    {{else}}
+    <div class="tt-dropzone" id="today-list">Brain Dump에서 항목을 드래그하세요</div>
+    {{end}}
+  </section>
+
+  <section class="panel">
+    <div class="panel-title">Brain Dump {{len .Backlog}} · unlimited</div>
+    <form method="post" action="/timetable/dump/add" class="row">
+      <input type="hidden" name="date" value="{{.Date}}">
+      <input type="text" name="title" placeholder="할 일을 입력하세요..." required>
+      <button type="submit" class="btn-primary">+</button>
+    </form>
+    <div class="tt-dump-list" id="dump-list">
+      {{range .Backlog}}
+      <div class="tt-dump-item" draggable="true" data-id="{{.ID}}" data-title="{{.Title}}">
+        <span class="tt-dump-title">{{.Title}}</span>
+        <button type="button" class="tt-edit-btn" title="수정" onclick="openTaskModal(this)"
+          data-id="{{.ID}}" data-title="{{.Title}}" data-note="{{.Note}}" data-color="{{.Color}}"
+          data-date="{{$.Date}}">✎</button>
+        <form method="post" action="/timetable/dump/delete/{{.ID}}" class="tx-del">
+          <input type="hidden" name="date" value="{{$.Date}}">
+          <button type="submit" title="삭제">×</button>
+        </form>
+      </div>
+      {{else}}
+      <div class="empty">Brain Dump가 비어있습니다.</div>
+      {{end}}
+    </div>
+  </section>
+
+  <section class="panel tt-grid-panel">
+    <div class="panel-title">시간표 {{.TotalBlocks}} blocks</div>
+
+    <details class="tt-dawn">
+      <summary>00 – 06 · 새벽 <span class="tt-dawn-count">{{len .DawnBlocks}} blocks</span></summary>
+      <div class="tt-grid" data-grid="dawn">
+        {{range .DawnHours}}<div class="hour-row" data-hour="{{.}}"><span class="hour-label">{{printf "%02d" .}}</span></div>{{end}}
+        <div class="tt-blocks-layer">
+          {{range .DawnBlocks}}
+          <div class="tt-block tt-c{{.Color}}" data-id="{{.ID}}"
+            data-title="{{.Title}}" data-note="{{.Note}}" data-color="{{.Color}}"
+            data-start="{{.StartHHMM}}" data-end="{{.EndHHMM}}"
+            {{if gt .TodayOrder 0}}data-today="1"{{end}} data-date="{{$.Date}}"
+            style="top:{{.TopPx}}px;height:{{.HeightPx}}px" onclick="openTaskModal(this)">
+            <div class="tt-block-title">{{.Title}}</div>
+            <div class="tt-block-time">{{.StartHHMM}} - {{.EndHHMM}} ({{.Duration}})</div>
+            <div class="resize-handle"></div>
+          </div>
+          {{end}}
+        </div>
+      </div>
+    </details>
+
+    <div class="tt-grid" data-grid="main" id="main-grid">
+      {{range .DayHours}}<div class="hour-row" data-hour="{{.}}"><span class="hour-label">{{printf "%02d" .}}</span></div>{{end}}
+      <div class="tt-blocks-layer" id="blocks-layer">
+        {{range .MainBlocks}}
+        <div class="tt-block tt-c{{.Color}}" data-id="{{.ID}}"
+          data-title="{{.Title}}" data-note="{{.Note}}" data-color="{{.Color}}"
+          data-start="{{.StartHHMM}}" data-end="{{.EndHHMM}}"
+          {{if gt .TodayOrder 0}}data-today="1"{{end}} data-date="{{$.Date}}"
+          style="top:{{.MainTopPx}}px;height:{{.HeightPx}}px" onclick="openTaskModal(this)">
+          <div class="tt-block-title">{{.Title}}</div>
+          <div class="tt-block-time">{{.StartHHMM}} - {{.EndHHMM}} ({{.Duration}})</div>
+          <div class="resize-handle"></div>
+        </div>
+        {{end}}
+      </div>
+      <div class="now-line" id="now-line" hidden><span class="now-label"></span></div>
+    </div>
+  </section>
+
+  </div>
+</div>
+{{template "task-modal" .}}
+{{template "nav" .}}
+{{template "scripts" .}}
+{{template "timetable-scripts" .}}
+</body>
+</html>
+
+{{define "task-modal"}}
+<dialog id="task-modal" class="edit-modal">
+  <form method="post" id="task-form">
+    <input type="hidden" name="date" id="task-date">
+    <div class="panel-title">일정 수정</div>
+    <div class="row">
+      <input type="text" name="title" id="task-title" placeholder="제목" required>
+    </div>
+    <div class="row">
+      <label class="tt-time-field">시작<input type="time" name="start_min" id="task-start" step="600"></label>
+      <label class="tt-time-field">종료<input type="time" name="end_min" id="task-end" step="600"></label>
+    </div>
+    <div class="row tt-duration" id="task-duration"></div>
+    <div class="row">
+      <label class="checkbox-label"><input type="checkbox" name="today" id="task-today"> 오늘의 계획에 추가</label>
+    </div>
+    <div class="row">
+      <textarea name="note" id="task-note" placeholder="메모" rows="3"></textarea>
+    </div>
+    <div class="row edit-modal-actions">
+      <button type="button" class="edit-cancel" onclick="closeTaskModal()">취소</button>
+      <button type="submit" class="btn-primary">저장</button>
+    </div>
+  </form>
+  <form method="post" id="task-delete-form" class="tx-del tt-modal-delete">
+    <input type="hidden" name="date" id="task-delete-date">
+    <button type="submit" class="edit-cancel">삭제</button>
+  </form>
+</dialog>
+<script>
+function openTaskModal(btn) {
+  if (btn.dataset.suppressClick) { delete btn.dataset.suppressClick; return; }
+  const d = btn.dataset;
+  const modal = document.getElementById('task-modal');
+  document.getElementById('task-form').action = '/timetable/edit/' + d.id;
+  document.getElementById('task-delete-form').action = '/timetable/delete/' + d.id;
+  document.getElementById('task-date').value = d.date;
+  document.getElementById('task-delete-date').value = d.date;
+  document.getElementById('task-title').value = d.title || '';
+  document.getElementById('task-note').value = d.note || '';
+  document.getElementById('task-start').value = d.start || '';
+  document.getElementById('task-end').value = d.end || '';
+  document.getElementById('task-today').checked = d.today === '1';
+  updateTaskDuration();
+  modal.showModal();
+}
+function closeTaskModal() {
+  document.getElementById('task-modal').close();
+}
+function updateTaskDuration() {
+  const s = document.getElementById('task-start').value;
+  const e = document.getElementById('task-end').value;
+  const box = document.getElementById('task-duration');
+  if (!s || !e) { box.textContent = ''; return; }
+  const [sh, sm] = s.split(':').map(Number);
+  const [eh, em] = e.split(':').map(Number);
+  const mins = (eh * 60 + em) - (sh * 60 + sm);
+  box.textContent = mins > 0 ? 'TOTAL · ' + fmtMins(mins) : '';
+}
+function fmtMins(mins) {
+  const h = Math.floor(mins / 60), m = mins % 60;
+  if (h === 0) return m + 'M';
+  if (m === 0) return h + 'H';
+  return h + 'H ' + m + 'M';
+}
+(function () {
+  const modal = document.getElementById('task-modal');
+  document.getElementById('task-start').addEventListener('input', updateTaskDuration);
+  document.getElementById('task-end').addEventListener('input', updateTaskDuration);
+  // Same reasoning as the transaction edit-modal: click outside the box closes it,
+  // and a successful live-swap means the save landed, so close then too.
+  modal.addEventListener('click', function (e) { if (e.target === modal) modal.close(); });
+  document.addEventListener('live:swap', function () { if (modal.open) modal.close(); });
+})();
+</script>
+{{end}}
+
+{{define "timetable-scripts"}}
+<script>
+// Drag-and-drop for the 시간표 tab. Three different mechanisms, matched to
+// what each interaction needs — see the comments at each block below.
+(function () {
+  const TT_DATE = "{{.Date}}";
+
+  // Reads real DOM geometry instead of a hardcoded px-per-hour constant, so
+  // the math stays correct whether the 새벽 <details> is collapsed or open.
+  function rowGeometry(grid) {
+    return [...grid.querySelectorAll('.hour-row[data-hour]')]
+      .map(function (el) {
+        const r = el.getBoundingClientRect();
+        return { hour: +el.dataset.hour, top: r.top, height: r.height };
+      })
+      .sort(function (a, b) { return a.top - b.top; });
+  }
+  function snap10(m) { return Math.round(m / 10) * 10; }
+  function yToMinute(clientY, rows) {
+    if (!rows.length) return 0;
+    for (const row of rows) {
+      if (clientY < row.top + row.height) {
+        const frac = Math.max(0, Math.min(1, (clientY - row.top) / row.height));
+        return Math.max(0, snap10(row.hour * 60 + frac * 60));
+      }
+    }
+    const last = rows[rows.length - 1];
+    return snap10(last.hour * 60 + 60);
+  }
+  // px is offsetTop within the grid's own coordinate space (blocks-layer
+  // starts flush with the grid's first hour-row), so the inverse is just an
+  // offset by that first row's hour.
+  function pxToMinute(px, rows) {
+    if (!rows.length) return 0;
+    return Math.max(0, snap10(rows[0].hour * 60 + px));
+  }
+
+  // Duplicated (not reused) from nav.html's shared fetch+swap, since drag
+  // commits are JS-initiated POSTs with no <form> involved for the delegated
+  // submit listener there to intercept.
+  function postLive(url, params) {
+    fetch(url, { method: 'POST', body: new URLSearchParams(params), credentials: 'same-origin' })
+      .then(function (res) {
+        if (res.status === 401) { window.location.href = '/login'; return null; }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.text();
+      })
+      .then(function (html) {
+        if (!html) return;
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        doc.querySelectorAll('[data-live]').forEach(function (next) {
+          const key = next.getAttribute('data-live');
+          const cur = document.querySelector('[data-live="' + CSS.escape(key) + '"]');
+          if (cur) cur.replaceWith(next);
+        });
+        document.dispatchEvent(new CustomEvent('live:swap'));
+      })
+      .catch(function () { window.location.reload(); });
+  }
+
+  // A. Brain Dump → 오늘의 계획: one-shot cross-list placement, no live
+  // reflow needed, so native HTML5 Drag and Drop is enough.
+  document.addEventListener('dragstart', function (e) {
+    const item = e.target.closest('.tt-dump-item[draggable]');
+    if (!item) return;
+    e.dataTransfer.setData('text/plain', item.dataset.id);
+    e.dataTransfer.effectAllowed = 'move';
+    item.classList.add('dragging');
+  });
+  document.addEventListener('dragend', function (e) {
+    const item = e.target.closest('.tt-dump-item[draggable]');
+    if (item) item.classList.remove('dragging');
+  });
+  document.addEventListener('dragover', function (e) {
+    if (e.target.closest('#today-list') || e.target.closest('.tt-grid')) e.preventDefault();
+  });
+  document.addEventListener('drop', function (e) {
+    const id = e.dataTransfer.getData('text/plain');
+    if (!id) return;
+
+    const todayList = e.target.closest('#today-list');
+    if (todayList) {
+      e.preventDefault();
+      postLive('/timetable/today/set/' + id, { date: TT_DATE });
+      return;
+    }
+    // B. Brain Dump → 시간표 grid: also native DnD; the drop event's
+    // clientY converts to a time via freshly-read row geometry.
+    const grid = e.target.closest('.tt-grid');
+    if (grid) {
+      e.preventDefault();
+      const start = yToMinute(e.clientY, rowGeometry(grid));
+      postLive('/timetable/schedule/' + id, { start_min: start, end_min: start + 30, date: TT_DATE });
+    }
+  });
+
+  // C. Move/resize an existing block: needs live visual feedback while
+  // dragging, which native DnD doesn't give — Pointer Events instead.
+  // pointermove NEVER touches the network; only pointerup commits, once.
+  document.addEventListener('pointerdown', function (e) {
+    const block = e.target.closest('.tt-block');
+    if (!block) return;
+    const grid = block.closest('.tt-grid');
+    const isResize = !!e.target.closest('.resize-handle');
+    e.preventDefault();
+    block.setPointerCapture(e.pointerId);
+
+    const startY = e.clientY;
+    const origTop = block.offsetTop;
+    const origHeight = block.offsetHeight;
+    const rows = rowGeometry(grid);
+    let moved = false;
+
+    function onMove(ev) {
+      const dy = ev.clientY - startY;
+      if (Math.abs(dy) > 2) moved = true;
+      if (isResize) {
+        block.style.height = Math.max(10, origHeight + dy) + 'px';
+      } else {
+        block.style.top = Math.max(0, origTop + dy) + 'px';
+      }
+    }
+    function onUp() {
+      block.removeEventListener('pointermove', onMove);
+      block.removeEventListener('pointerup', onUp);
+      if (!moved) return; // a plain click — let the onclick open the modal
+      block.dataset.suppressClick = '1';
+      const startMin = pxToMinute(block.offsetTop, rows);
+      let endMin = pxToMinute(block.offsetTop + block.offsetHeight, rows);
+      if (endMin <= startMin) endMin = startMin + 10;
+      postLive('/timetable/schedule/' + block.dataset.id, { start_min: startMin, end_min: endMin, date: TT_DATE });
+    }
+    block.addEventListener('pointermove', onMove);
+    block.addEventListener('pointerup', onUp, { once: true });
+  });
+
+  // now-line: purely client-side, recomputed on a timer and after every
+  // live-swap (the grid it measures may have just been replaced).
+  function updateNowLine() {
+    const grid = document.getElementById('main-grid');
+    const line = document.getElementById('now-line');
+    if (!grid || !line) return;
+    const rows = rowGeometry(grid);
+    if (!rows.length) return;
+    const now = new Date();
+    const mins = now.getHours() * 60 + now.getMinutes();
+    if (mins < rows[0].hour * 60) { line.hidden = true; return; }
+    line.style.top = (mins - rows[0].hour * 60) + 'px';
+    const label = line.querySelector('.now-label');
+    if (label) label.textContent = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+    line.hidden = false;
+  }
+  updateNowLine();
+  setInterval(updateNowLine, 30000);
+  document.addEventListener('live:swap', updateNowLine);
+})();
+</script>
+{{end}}

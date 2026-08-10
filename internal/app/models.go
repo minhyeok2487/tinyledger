@@ -179,3 +179,42 @@ type WishlistData struct {
 	Today       string
 	Nav         string
 }
+
+// Task moves through backlog -> planned -> scheduled purely by which of
+// TodayOrder/StartMin/EndMin are set; see db.go's tasks table comment.
+type Task struct {
+	ID         int64
+	Title      string
+	Note       string
+	Date       string
+	TodayOrder int64 // 0 = not in 오늘의 계획
+	StartMin   int64 // -1 = not scheduled (0 is a valid time, midnight)
+	EndMin     int64
+	Color      int
+	Done       bool
+	SortOrder  int
+}
+
+func (t Task) Scheduled() bool { return t.StartMin >= 0 }
+
+// TopPx/HeightPx let the template position a block without any JS — the
+// grid is correct even before scripts run. 1 minute = 1px, matching the
+// hour-row heights in style.css. TopPx is relative to the 새벽 (00:00)
+// grid; MainTopPx is relative to the main (06:00) grid, which starts 360
+// minutes later — using the wrong one renders the block ~6 hours too low.
+func (t Task) TopPx() int64      { return t.StartMin }
+func (t Task) MainTopPx() int64  { return t.StartMin - 6*60 }
+func (t Task) HeightPx() int64   { return t.EndMin - t.StartMin }
+func (t Task) Duration() string  { return fmtDuration(int(t.EndMin - t.StartMin)) }
+func (t Task) StartHHMM() string { return minToHHMM(t.StartMin) }
+func (t Task) EndHHMM() string   { return minToHHMM(t.EndMin) }
+
+type TimetableData struct {
+	Date, PrevDate, NextDate, TodayDate string
+	IsToday                             bool
+	Backlog, Planned                    []Task
+	DawnBlocks, MainBlocks              []Task // Scheduled, split at 06:00 to match the collapsible dawn section
+	TotalBlocks                         int
+	DawnHours, DayHours                 []int
+	Nav                                 string
+}

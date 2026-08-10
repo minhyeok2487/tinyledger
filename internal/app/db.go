@@ -48,7 +48,7 @@ func initTursoDB(url, token string) {
 
 // schemaVersion is bumped whenever setupSchema gains a table, column, or
 // migration, so remote databases pick the change up on their next cold start.
-const schemaVersion = 3
+const schemaVersion = 4
 
 func schemaCurrent() bool {
 	var v int
@@ -130,6 +130,22 @@ func setupSchema() {
 			created_at TEXT NOT NULL DEFAULT '',
 			bought_at TEXT
 		)`,
+		// A task moves through backlog -> planned -> scheduled purely by
+		// which of today_order/start_min/end_min are set — one row, no
+		// separate tables to keep in sync as it crosses those states.
+		`CREATE TABLE IF NOT EXISTS tasks (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			title TEXT NOT NULL,
+			note TEXT NOT NULL DEFAULT '',
+			date TEXT NOT NULL,
+			today_order INTEGER,
+			start_min INTEGER,
+			end_min INTEGER,
+			color INTEGER NOT NULL DEFAULT 0,
+			done INTEGER NOT NULL DEFAULT 0,
+			sort_order INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_tasks_date ON tasks(date)`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
