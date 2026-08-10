@@ -330,7 +330,7 @@ a { color: inherit; text-decoration: none; }
 /* ---------- forms ---------- */
 .row { display: flex; gap: 8px; margin-bottom: 8px; }
 .row:last-child { margin-bottom: 0; }
-input, select, button {
+input, select, textarea, button {
   background: #1a1e27;
   border: 1px solid var(--border);
   color: var(--text);
@@ -340,12 +340,12 @@ input, select, button {
   min-width: 0;
   font-family: inherit;
 }
-input, select { flex: 1; }
-input:focus, select:focus {
+input, select, textarea { flex: 1; }
+input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--accent);
 }
-input::placeholder { color: #575d6b; }
+input::placeholder, textarea::placeholder { color: #575d6b; }
 button {
   background: var(--accent);
   color: #0b0d12;
@@ -395,12 +395,41 @@ button:active { transform: scale(0.97); }
   color: var(--muted);
   cursor: pointer;
 }
-.checkbox-label input[type="checkbox"] {
+/* Custom box instead of accent-color: some browsers still render the
+   unchecked native control as a plain white square regardless of
+   accent-color, which reads as broken against this dark theme. */
+.checkbox-label input[type="checkbox"],
+.tt-check-form input[type=checkbox] {
   flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  accent-color: var(--accent);
-  padding: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  border: 1.5px solid var(--border);
+  border-radius: 5px;
+  background: #1a1e27;
+  cursor: pointer;
+  position: relative;
+}
+.checkbox-label input[type="checkbox"]:hover,
+.tt-check-form input[type=checkbox]:hover { border-color: var(--accent); }
+.checkbox-label input[type="checkbox"]:checked,
+.tt-check-form input[type=checkbox]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.checkbox-label input[type="checkbox"]:checked::after,
+.tt-check-form input[type=checkbox]:checked::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 4px;
+  height: 9px;
+  border: solid #0b0d12;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 
 .budget-row {
@@ -625,10 +654,16 @@ button:active { transform: scale(0.97); }
   .tt-layout {
     display: grid;
     grid-template-columns: 360px 1fr;
-    align-items: start;
+    align-items: stretch;
     gap: 20px;
   }
   .tt-col-left .tt-today-list, .tt-col-left .tt-dump-list { grid-template-columns: 1fr; }
+  /* Stretch Brain Dump to fill whatever's left below 오늘의 계획, so the
+     left column's bottom edge lines up with the schedule grid's instead of
+     stopping short in a tall empty gap. */
+  .tt-col-left { display: flex; flex-direction: column; }
+  .tt-dump-panel { flex: 1; display: flex; flex-direction: column; }
+  .tt-dump-panel .tt-dump-list { flex: 1; align-content: flex-start; }
 
   .dash-grid {
     grid-template-columns: 1fr 340px;
@@ -824,8 +859,31 @@ html.nav-busy::before {
   padding: 7px 16px;
   font-size: 13px;
 }
+/* button.btn-danger (not just .btn-danger) to out-specificity ".tx-del
+   button", which otherwise wins and forces the muted color back on. */
+button.btn-danger { color: var(--expense); border-color: var(--expense); }
+button.btn-danger:hover { background: var(--expense); color: #0b0d12; }
 
 /* ---------- 시간표(타임박싱) ---------- */
+.tt-cat-manage-btn {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 20;
+  background: var(--card-hi);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.tt-cat-manage-btn:hover { border-color: var(--accent); color: var(--accent); }
+.tt-cat-manage-list { display: flex; flex-direction: column; gap: 1px; margin-bottom: 12px; border-radius: 10px; overflow: hidden; }
+.tt-cat-manage-row { padding: 8px 10px; gap: 8px; }
+.tt-cat-rename-form { display: flex; gap: 6px; flex: 1; align-items: center; }
+.tt-cat-rename-form input { flex: 1; padding: 7px 10px; }
+
 .tt-today-list, .tt-dump-list {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -871,7 +929,6 @@ html.nav-busy::before {
 .tt-block-title .tt-cat-tag, .tt-block-title .tt-dday-badge { font-size: 9.5px; padding: 0 5px; }
 .tt-today-num { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
 .tt-check-form { flex: 0 0 auto; display: flex; }
-.tt-check-form input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); }
 .tt-today-title, .tt-dump-title { flex: 1; min-width: 0; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tt-today-title.done { color: var(--muted); text-decoration: line-through; }
 .tt-edit-btn {
