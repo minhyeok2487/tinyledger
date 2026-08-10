@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -169,48 +170,49 @@ func setTodayOrder(id, date string) {
 	}
 }
 
+const dayStartMin = 6 * 60 // 06:00, matching the main grid's start
+
 // autoScheduleIfUnscheduled gives a freshly-planned task a spot on the grid
 // so 오늘의 계획 and 시간표 stay in sync — a task never shows in "today's
 // plan" while being invisible on the schedule. Leaves already-scheduled
 // tasks untouched (re-planning one shouldn't move its existing time block).
+//
+// The free-slot search and the write happen in a single UPDATE statement
+// rather than a SELECT-then-decide-then-UPDATE: two concurrent requests
+// (e.g. two tabs dragging different tasks into 오늘의 계획 at once) would
+// otherwise both read the schedule before either writes, and both land on
+// the same "free" slot. A lone statement is one atomic write as far as
+// SQLite/Turso is concerned, so the second request only starts once the
+// first has committed and sees its result.
 func autoScheduleIfUnscheduled(id, date string) {
-	var start sql.NullInt64
-	if err := db.QueryRow(`SELECT start_min FROM tasks WHERE id = ?`, id).Scan(&start); err != nil || start.Valid {
+	const duration = 30
+	var starts []string
+	var args []any
+	for start := dayStartMin; start+duration <= 24*60; start += 30 {
+		starts = append(starts, "(?)")
+		args = append(args, start)
+	}
+	if len(starts) == 0 {
 		return
 	}
-	s, e := findFreeSlot(date, 30)
-	db.Exec(`UPDATE tasks SET start_min = ?, end_min = ? WHERE id = ?`, s, e, id)
-}
 
-const dayStartMin = 6 * 60 // 06:00, matching the main grid's start
+	query := `WITH slot(v) AS (
+		SELECT COALESCE(MIN(c.column1), ?) FROM (VALUES ` + strings.Join(starts, ",") + `) AS c
+		WHERE NOT EXISTS (
+			SELECT 1 FROM tasks t2 WHERE t2.date = ? AND t2.start_min IS NOT NULL
+				AND t2.start_min < c.column1 + ? AND c.column1 < t2.end_min
+		)
+	)
+	UPDATE tasks SET
+		start_min = (SELECT v FROM slot),
+		end_min = (SELECT v FROM slot) + ?
+	WHERE id = ? AND date = ? AND start_min IS NULL`
 
-// findFreeSlot scans the day in 30-minute steps from dayStartMin for a gap
-// that doesn't overlap any already-scheduled task, so newly auto-placed
-// tasks don't stack directly on top of existing ones. Falls back to the
-// first slot (accepting overlap) only if the whole day is already packed —
-// the app allows overlapping blocks elsewhere, so this isn't a new case.
-func findFreeSlot(date string, duration int) (int, int) {
-	tasks, err := listTasks(date)
-	if err != nil {
-		return dayStartMin, dayStartMin + duration
+	full := append([]any{dayStartMin}, args...)
+	full = append(full, date, duration, duration, id, date)
+	if _, err := db.Exec(query, full...); err != nil {
+		log.Println("autoScheduleIfUnscheduled:", err)
 	}
-	for start := dayStartMin; start+duration <= 24*60; start += 30 {
-		end := start + duration
-		free := true
-		for _, t := range tasks {
-			if !t.Scheduled() {
-				continue
-			}
-			if int(t.StartMin) < end && start < int(t.EndMin) {
-				free = false
-				break
-			}
-		}
-		if free {
-			return start, end
-		}
-	}
-	return dayStartMin, dayStartMin + duration
 }
 
 func unsetTodayOrder(id, date string) {

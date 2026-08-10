@@ -502,6 +502,7 @@ button:active { transform: scale(0.97); }
   color: var(--muted);
   background: var(--card);
   font-size: 13px;
+  grid-column: 1 / -1; /* ignored outside a grid; keeps it full-width inside .tt-dump-list */
 }
 
 /* ---------- calendar ---------- */
