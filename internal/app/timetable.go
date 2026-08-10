@@ -154,11 +154,63 @@ func handleTodayUnset(w http.ResponseWriter, r *http.Request) {
 // 계획에 추가" checkbox (the drag-free path, needed since native HTML5
 // drag-and-drop doesn't work on touch browsers).
 func setTodayOrder(id, date string) {
-	db.Exec(`UPDATE tasks SET today_order =
+	res, err := db.Exec(`UPDATE tasks SET today_order =
 			(SELECT COUNT(*) FROM tasks WHERE date = ? AND today_order IS NOT NULL) + 1
 		WHERE id = ? AND date = ? AND today_order IS NULL
 			AND (SELECT COUNT(*) FROM tasks WHERE date = ? AND today_order IS NOT NULL) < ?`,
 		date, id, date, date, maxTodaySlots)
+	if err != nil {
+		return
+	}
+	// Only auto-place if the UPDATE actually claimed a slot — a full day or
+	// an already-planned task must not get (re)scheduled.
+	if n, _ := res.RowsAffected(); n > 0 {
+		autoScheduleIfUnscheduled(id, date)
+	}
+}
+
+// autoScheduleIfUnscheduled gives a freshly-planned task a spot on the grid
+// so 오늘의 계획 and 시간표 stay in sync — a task never shows in "today's
+// plan" while being invisible on the schedule. Leaves already-scheduled
+// tasks untouched (re-planning one shouldn't move its existing time block).
+func autoScheduleIfUnscheduled(id, date string) {
+	var start sql.NullInt64
+	if err := db.QueryRow(`SELECT start_min FROM tasks WHERE id = ?`, id).Scan(&start); err != nil || start.Valid {
+		return
+	}
+	s, e := findFreeSlot(date, 30)
+	db.Exec(`UPDATE tasks SET start_min = ?, end_min = ? WHERE id = ?`, s, e, id)
+}
+
+const dayStartMin = 6 * 60 // 06:00, matching the main grid's start
+
+// findFreeSlot scans the day in 30-minute steps from dayStartMin for a gap
+// that doesn't overlap any already-scheduled task, so newly auto-placed
+// tasks don't stack directly on top of existing ones. Falls back to the
+// first slot (accepting overlap) only if the whole day is already packed —
+// the app allows overlapping blocks elsewhere, so this isn't a new case.
+func findFreeSlot(date string, duration int) (int, int) {
+	tasks, err := listTasks(date)
+	if err != nil {
+		return dayStartMin, dayStartMin + duration
+	}
+	for start := dayStartMin; start+duration <= 24*60; start += 30 {
+		end := start + duration
+		free := true
+		for _, t := range tasks {
+			if !t.Scheduled() {
+				continue
+			}
+			if int(t.StartMin) < end && start < int(t.EndMin) {
+				free = false
+				break
+			}
+		}
+		if free {
+			return start, end
+		}
+	}
+	return dayStartMin, dayStartMin + duration
 }
 
 func unsetTodayOrder(id, date string) {
