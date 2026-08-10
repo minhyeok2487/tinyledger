@@ -29,7 +29,7 @@ func handleAdd(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid date", 400)
 		return
 	}
-	if err != nil || amount <= 0 || (typ != "income" && typ != "expense") {
+	if err != nil || amount <= 0 || (typ != "income" && typ != "expense") || !isValidCategory(typ, category) {
 		http.Error(w, "invalid input", 400)
 		return
 	}
@@ -77,7 +77,7 @@ func handleTransactionUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid date", 400)
 		return
 	}
-	if err != nil || amount <= 0 || (typ != "income" && typ != "expense") {
+	if err != nil || amount <= 0 || (typ != "income" && typ != "expense") || !isValidCategory(typ, category) {
 		http.Error(w, "invalid input", 400)
 		return
 	}

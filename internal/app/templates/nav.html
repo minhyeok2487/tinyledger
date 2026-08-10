@@ -91,7 +91,16 @@ function openEditModal(btn) {
   document.getElementById('edit-date').value = d.date;
   document.getElementById('edit-type').value = d.type;
   updateEditCategoryOptions(document.getElementById('edit-type'));
-  document.getElementById('edit-category').value = d.category;
+  const catSel = document.getElementById('edit-category');
+  // A category from older data that isn't in the current list would
+  // otherwise leave the select unselected (value ""), and saving without
+  // touching it would silently blank the transaction's category.
+  if (![...catSel.options].some(o => o.value === d.category)) {
+    const opt = document.createElement('option');
+    opt.value = d.category; opt.textContent = d.category + ' (알 수 없음)';
+    catSel.appendChild(opt);
+  }
+  catSel.value = d.category;
   document.getElementById('edit-amount').value = d.amount;
   document.getElementById('edit-memo').value = d.memo || '';
   const acctSel = document.getElementById('edit-account');
