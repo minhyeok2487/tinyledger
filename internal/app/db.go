@@ -48,7 +48,7 @@ func initTursoDB(url, token string) {
 
 // schemaVersion is bumped whenever setupSchema gains a table, column, or
 // migration, so remote databases pick the change up on their next cold start.
-const schemaVersion = 2
+const schemaVersion = 3
 
 func schemaCurrent() bool {
 	var v int
@@ -114,6 +114,22 @@ func setupSchema() {
 			id INTEGER PRIMARY KEY CHECK (id = 1),
 			content TEXT NOT NULL DEFAULT ''
 		)`,
+		`CREATE TABLE IF NOT EXISTS hobby_items (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL UNIQUE,
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			archived INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE TABLE IF NOT EXISTS wishlist (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			price INTEGER NOT NULL DEFAULT 0,
+			url TEXT,
+			memo TEXT,
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			created_at TEXT NOT NULL DEFAULT '',
+			bought_at TEXT
+		)`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
@@ -124,6 +140,11 @@ func setupSchema() {
 	migrateRecurringToTemplates()
 	ensureColumn("accounts", "balance", "INTEGER NOT NULL DEFAULT 0")
 	ensureColumn("accounts", "excluded", "INTEGER NOT NULL DEFAULT 0")
+	ensureColumn("transactions", "hobby_item_id", "INTEGER")
+	// Created after the column exists, so it can't run inside the stmts list.
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_tx_hobby ON transactions(hobby_item_id)`); err != nil {
+		log.Println("idx_tx_hobby:", err)
+	}
 
 	// seed default account
 	var count int
@@ -206,6 +227,10 @@ func ensureColumn(table, column, def string) {
 const accountIDOrDefault = `COALESCE(
 	(SELECT id FROM accounts WHERE id = ?),
 	(SELECT id FROM accounts ORDER BY sort_order, id LIMIT 1))`
+
+// hobbyItemOrNull validates the sub-item inside the INSERT so a stale or
+// bogus id stores NULL (미분류) instead of a dangling reference.
+const hobbyItemOrNull = `(SELECT id FROM hobby_items WHERE id = ?)`
 
 func listAccounts() ([]Account, error) {
 	rows, err := db.Query(`SELECT id, name, icon, balance, COALESCE(excluded,0) FROM accounts ORDER BY sort_order, id`)

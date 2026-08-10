@@ -34,9 +34,15 @@ func handleAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = db.Exec(`INSERT INTO transactions(account_id, date, type, category, amount, memo)
-		VALUES (`+accountIDOrDefault+`, ?, ?, ?, ?, ?)`,
-		accountID, date, typ, category, amount, memo)
+	// The sub-item only means anything for 여가 expenses; anything else
+	// stores NULL so the 여가 tab never shows a stray bucket.
+	var hobbyItemID int64
+	if typ == "expense" && category == hobbyCategory {
+		hobbyItemID, _ = strconv.ParseInt(r.FormValue("hobby_item_id"), 10, 64)
+	}
+	_, err = db.Exec(`INSERT INTO transactions(account_id, date, type, category, amount, memo, hobby_item_id)
+		VALUES (`+accountIDOrDefault+`, ?, ?, ?, ?, ?, `+hobbyItemOrNull+`)`,
+		accountID, date, typ, category, amount, memo, hobbyItemID)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return

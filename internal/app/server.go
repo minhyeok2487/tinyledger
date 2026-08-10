@@ -78,6 +78,18 @@ func setup() {
 	mux.HandleFunc("POST /accounts/delete/{id}", handleAccountDelete)
 	mux.HandleFunc("POST /accounts/transfer", handleTransfer)
 
+	mux.HandleFunc("GET /hobby", handleHobby)
+	mux.HandleFunc("POST /hobby/items/add", handleHobbyItemAdd)
+	mux.HandleFunc("POST /hobby/items/rename/{id}", handleHobbyItemRename)
+	mux.HandleFunc("POST /hobby/items/delete/{id}", handleHobbyItemDelete)
+	mux.HandleFunc("POST /hobby/assign/{id}", handleHobbyAssign)
+
+	mux.HandleFunc("GET /wishlist", handleWishlist)
+	mux.HandleFunc("POST /wishlist/add", handleWishAdd)
+	mux.HandleFunc("POST /wishlist/update/{id}", handleWishUpdate)
+	mux.HandleFunc("POST /wishlist/delete/{id}", handleWishDelete)
+	mux.HandleFunc("POST /wishlist/buy/{id}", handleWishBuy)
+
 	mux.HandleFunc("POST /notes", handleNoteSave)
 
 	static := http.FileServerFS(staticFS)

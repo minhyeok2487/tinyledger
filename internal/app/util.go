@@ -133,3 +133,12 @@ func shiftMonth(month string, delta int) string {
 	}
 	return t.AddDate(0, delta, 0).Format("2006-01")
 }
+
+func isExpenseCategory(c string) bool {
+	for _, e := range expenseCategories {
+		if e == c {
+			return true
+		}
+	}
+	return false
+}
