@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -154,11 +155,64 @@ func handleTodayUnset(w http.ResponseWriter, r *http.Request) {
 // 계획에 추가" checkbox (the drag-free path, needed since native HTML5
 // drag-and-drop doesn't work on touch browsers).
 func setTodayOrder(id, date string) {
-	db.Exec(`UPDATE tasks SET today_order =
+	res, err := db.Exec(`UPDATE tasks SET today_order =
 			(SELECT COUNT(*) FROM tasks WHERE date = ? AND today_order IS NOT NULL) + 1
 		WHERE id = ? AND date = ? AND today_order IS NULL
 			AND (SELECT COUNT(*) FROM tasks WHERE date = ? AND today_order IS NOT NULL) < ?`,
 		date, id, date, date, maxTodaySlots)
+	if err != nil {
+		return
+	}
+	// Only auto-place if the UPDATE actually claimed a slot — a full day or
+	// an already-planned task must not get (re)scheduled.
+	if n, _ := res.RowsAffected(); n > 0 {
+		autoScheduleIfUnscheduled(id, date)
+	}
+}
+
+const dayStartMin = 6 * 60 // 06:00, matching the main grid's start
+
+// autoScheduleIfUnscheduled gives a freshly-planned task a spot on the grid
+// so 오늘의 계획 and 시간표 stay in sync — a task never shows in "today's
+// plan" while being invisible on the schedule. Leaves already-scheduled
+// tasks untouched (re-planning one shouldn't move its existing time block).
+//
+// The free-slot search and the write happen in a single UPDATE statement
+// rather than a SELECT-then-decide-then-UPDATE: two concurrent requests
+// (e.g. two tabs dragging different tasks into 오늘의 계획 at once) would
+// otherwise both read the schedule before either writes, and both land on
+// the same "free" slot. A lone statement is one atomic write as far as
+// SQLite/Turso is concerned, so the second request only starts once the
+// first has committed and sees its result.
+func autoScheduleIfUnscheduled(id, date string) {
+	const duration = 30
+	var starts []string
+	var args []any
+	for start := dayStartMin; start+duration <= 24*60; start += 30 {
+		starts = append(starts, "(?)")
+		args = append(args, start)
+	}
+	if len(starts) == 0 {
+		return
+	}
+
+	query := `WITH slot(v) AS (
+		SELECT COALESCE(MIN(c.column1), ?) FROM (VALUES ` + strings.Join(starts, ",") + `) AS c
+		WHERE NOT EXISTS (
+			SELECT 1 FROM tasks t2 WHERE t2.date = ? AND t2.start_min IS NOT NULL
+				AND t2.start_min < c.column1 + ? AND c.column1 < t2.end_min
+		)
+	)
+	UPDATE tasks SET
+		start_min = (SELECT v FROM slot),
+		end_min = (SELECT v FROM slot) + ?
+	WHERE id = ? AND date = ? AND start_min IS NULL`
+
+	full := append([]any{dayStartMin}, args...)
+	full = append(full, date, duration, duration, id, date)
+	if _, err := db.Exec(query, full...); err != nil {
+		log.Println("autoScheduleIfUnscheduled:", err)
+	}
 }
 
 func unsetTodayOrder(id, date string) {

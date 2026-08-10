@@ -502,6 +502,7 @@ button:active { transform: scale(0.97); }
   color: var(--muted);
   background: var(--card);
   font-size: 13px;
+  grid-column: 1 / -1; /* ignored outside a grid; keeps it full-width inside .tt-dump-list */
 }
 
 /* ---------- calendar ---------- */
@@ -815,7 +816,11 @@ html.nav-busy::before {
 }
 
 /* ---------- 시간표(타임박싱) ---------- */
-.tt-today-list, .tt-dump-list { display: flex; flex-direction: column; gap: 4px; }
+.tt-today-list, .tt-dump-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
 .tt-today-row, .tt-dump-item {
   display: flex;
   align-items: center;
@@ -823,6 +828,10 @@ html.nav-busy::before {
   background: var(--card-hi);
   border-radius: 10px;
   padding: 8px 10px;
+  min-width: 0;
+}
+@media (max-width: 420px) {
+  .tt-today-list, .tt-dump-list { grid-template-columns: 1fr; }
 }
 .tt-dump-item[draggable] { cursor: grab; }
 .tt-dump-item.dragging { opacity: 0.4; }
