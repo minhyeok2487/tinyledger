@@ -15,6 +15,10 @@
 
 * { box-sizing: border-box; }
 html { -webkit-tap-highlight-color: transparent; }
+/* [hidden] and .row (display:flex) have equal specificity, so without this
+   the later rule wins and a hidden] row still renders — pre-existing bug
+   that made #hobby-row always visible regardless of category. */
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
@@ -784,3 +788,28 @@ html.nav-busy::before {
 .bought-panel > summary { cursor: pointer; }
 .wish-row.bought { opacity: 0.6; }
 .wish-row.bought .tx-cat { text-decoration: line-through; }
+
+/* ---------- edit modal ---------- */
+.edit-modal {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  width: min(92vw, 380px);
+}
+.edit-modal::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+.edit-modal .panel-title { margin-bottom: 10px; }
+.edit-modal-actions { justify-content: flex-end; gap: 8px; }
+.edit-cancel {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 10px;
+  padding: 7px 16px;
+  font-size: 13px;
+}

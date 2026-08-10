@@ -42,7 +42,8 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 		args = append(args, accountID)
 	}
 
-	query := `SELECT t.id, t.account_id, a.name, t.date, t.type, t.category, t.amount, t.memo
+	query := `SELECT t.id, t.account_id, a.name, t.date, t.type, t.category, t.amount, t.memo,
+			COALESCE(t.hobby_item_id,0)
 		FROM transactions t JOIN accounts a ON a.id = t.account_id ` + where + ` ORDER BY t.date DESC, t.id DESC LIMIT 300`
 
 	rows, err := db.Query(query, args...)
@@ -53,7 +54,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 		for rows.Next() {
 			var tx Transaction
 			var memo sql.NullString
-			if rows.Scan(&tx.ID, &tx.AccountID, &tx.AccountName, &tx.Date, &tx.Type, &tx.Category, &tx.Amount, &memo) == nil {
+			if rows.Scan(&tx.ID, &tx.AccountID, &tx.AccountName, &tx.Date, &tx.Type, &tx.Category, &tx.Amount, &memo, &tx.HobbyItemID) == nil {
 				tx.Memo = memo.String
 				txs = append(txs, tx)
 				if tx.Type == "expense" {
@@ -66,6 +67,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	accounts, _ := listAccounts()
+	hobbyItems, _ := listHobbyItems(false)
 	data := SearchData{
 		Keyword:      keyword,
 		Category:     category,
@@ -76,6 +78,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 		Accounts:     accounts,
 		ExpenseCats:  expenseCategories,
 		IncomeCats:   incomeCategories,
+		HobbyItems:   hobbyItems,
 		Transactions: txs,
 		Total:        total,
 		Count:        len(txs),

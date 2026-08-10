@@ -19,6 +19,9 @@ type Transaction struct {
 	Category    string
 	Amount      int64
 	Memo        string
+	// HobbyItemID is 0 when unset; only meaningful for 여가 expenses, kept
+	// here so the edit modal can pre-select the current sub-item.
+	HobbyItemID int64
 }
 
 type Template struct {
@@ -98,6 +101,7 @@ type SearchData struct {
 	Accounts     []Account
 	ExpenseCats  []string
 	IncomeCats   []string
+	HobbyItems   []HobbyItem
 	Transactions []Transaction
 	Total        int64
 	Count        int

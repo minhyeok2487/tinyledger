@@ -10,6 +10,121 @@
 </nav>
 {{end}}
 
+{{/*
+  edit-modal is included only by pages that carry ExpenseCats/IncomeCats/
+  HobbyItems/Accounts (dashboard.html, search.html) — it is never executed by
+  pages lacking those fields, so referencing them here is safe.
+*/}}
+{{define "edit-modal"}}
+<dialog id="edit-modal" class="edit-modal">
+  <form method="post" id="edit-form">
+    <input type="hidden" name="redirect" id="edit-redirect">
+    <div class="panel-title">내역 수정</div>
+    <div class="row">
+      <input type="date" name="date" id="edit-date" required>
+      <select name="type" class="type-select" id="edit-type" onchange="updateEditCategoryOptions(this); toggleEditHobbyRow()">
+        <option value="expense">지출</option>
+        <option value="income">수입</option>
+      </select>
+    </div>
+    <div class="row">
+      <select name="category" class="category-select" id="edit-category" onchange="toggleEditHobbyRow()">
+        {{range .ExpenseCats}}<option value="{{.}}">{{icon .}} {{.}}</option>{{end}}
+      </select>
+      <input type="number" name="amount" id="edit-amount" placeholder="금액" min="1" required>
+    </div>
+    <div class="row" id="edit-hobby-row" hidden>
+      <select name="hobby_item_id" id="edit-hobby-item">
+        <option value="0">🎮 여가 · 미분류</option>
+        {{range .HobbyItems}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+      </select>
+    </div>
+    {{if gt (len .Accounts) 1}}
+    <div class="row">
+      <select name="account_id" id="edit-account">
+        {{range .Accounts}}<option value="{{.ID}}">{{.Icon}} {{.Name}}</option>{{end}}
+      </select>
+    </div>
+    {{end}}
+    <div class="row">
+      <input type="text" name="memo" id="edit-memo" placeholder="메모 (선택)">
+    </div>
+    <div class="row edit-modal-actions">
+      <button type="button" class="edit-cancel" onclick="closeEditModal()">취소</button>
+      <button type="submit" class="btn-primary">저장</button>
+    </div>
+  </form>
+</dialog>
+<script>
+const editExpenseCats = {{.ExpenseCats}};
+const editIncomeCats = {{.IncomeCats}};
+
+function updateEditCategoryOptions(sel) {
+  const type = sel.value;
+  const catSel = document.getElementById('edit-category');
+  const prev = catSel.value;
+  const cats = type === 'income' ? editIncomeCats : editExpenseCats;
+  catSel.innerHTML = '';
+  cats.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c; opt.textContent = c;
+    catSel.appendChild(opt);
+  });
+  if (cats.includes(prev)) catSel.value = prev;
+}
+
+function toggleEditHobbyRow() {
+  const row = document.getElementById('edit-hobby-row');
+  if (!row) return;
+  const isExpense = document.getElementById('edit-type').value === 'expense';
+  const isHobby = document.getElementById('edit-category').value === '여가';
+  row.hidden = !(isExpense && isHobby);
+}
+
+// btn is the ✎ button on a transaction row, carrying the current values as
+// data-* attributes so no extra request is needed to populate the form.
+function openEditModal(btn) {
+  const d = btn.dataset;
+  const modal = document.getElementById('edit-modal');
+
+  document.getElementById('edit-form').action = '/update/' + d.id;
+  document.getElementById('edit-date').value = d.date;
+  document.getElementById('edit-type').value = d.type;
+  updateEditCategoryOptions(document.getElementById('edit-type'));
+  document.getElementById('edit-category').value = d.category;
+  document.getElementById('edit-amount').value = d.amount;
+  document.getElementById('edit-memo').value = d.memo || '';
+  const acctSel = document.getElementById('edit-account');
+  if (acctSel) acctSel.value = d.accountId;
+  const hobbySel = document.getElementById('edit-hobby-item');
+  if (hobbySel) hobbySel.value = d.hobbyItemId || '0';
+  toggleEditHobbyRow();
+  document.getElementById('edit-redirect').value = location.pathname + location.search;
+
+  modal.showModal();
+}
+
+function closeEditModal() {
+  document.getElementById('edit-modal').close();
+}
+
+(function () {
+  const modal = document.getElementById('edit-modal');
+  // Clicking the backdrop (outside the dialog's own box) closes it — the
+  // click target is the <dialog> element itself only when nothing inside it
+  // was hit, since inner elements would otherwise receive the click first.
+  modal.addEventListener('click', function (e) {
+    if (e.target === modal) modal.close();
+  });
+  // A successful live-swap means the edit was saved; the dialog sits outside
+  // every data-live region, so nothing else would close it automatically.
+  document.addEventListener('live:swap', function () {
+    if (modal.open) modal.close();
+  });
+})();
+</script>
+{{end}}
+
 {{define "scripts"}}
 <script>
 // Writes are plain form POSTs. Where the page marks its regions with
