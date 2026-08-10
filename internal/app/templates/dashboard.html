@@ -189,6 +189,12 @@
           <span class="tx-date">{{.Date}}{{if gt (len $.Accounts) 1}} · {{.AccountName}}{{end}}</span>
         </div>
         <span class="tx-amount">{{if eq .Type "expense"}}-{{else}}+{{end}}{{comma .Amount}}</span>
+        <div class="tx-actions">
+          <button type="button" title="수정" onclick="openEditModal(this)"
+            data-id="{{.ID}}" data-date="{{.Date}}" data-type="{{.Type}}" data-category="{{.Category}}"
+            data-amount="{{.Amount}}" data-memo="{{.Memo}}" data-account-id="{{.AccountID}}"
+            data-hobby-item-id="{{.HobbyItemID}}">✎</button>
+        </div>
         <form method="post" action="/delete/{{.ID}}?redirect=/%3Fmonth%3D{{$.Month}}" class="tx-del">
           <button type="submit" title="삭제">×</button>
         </form>
@@ -263,6 +269,7 @@ function applyFav(btn) {
   toggleHobbyRow();
 }
 </script>
+{{template "edit-modal" .}}
 {{template "nav" .}}
 {{template "scripts" .}}
 </body>

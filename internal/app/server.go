@@ -62,6 +62,7 @@ func setup() {
 
 	mux.HandleFunc("GET /{$}", handleDashboard)
 	mux.HandleFunc("POST /add", handleAdd)
+	mux.HandleFunc("POST /update/{id}", handleTransactionUpdate)
 	mux.HandleFunc("POST /delete/{id}", handleDelete)
 
 	mux.HandleFunc("GET /calendar", handleCalendar)

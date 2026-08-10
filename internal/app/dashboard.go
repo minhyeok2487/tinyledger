@@ -203,7 +203,8 @@ func monthBudgets(month string) (map[string]int64, error) {
 
 func monthTransactions(month string, accountID int64) ([]Transaction, error) {
 	monthStart, monthEnd := monthRange(month)
-	query := `SELECT t.id, t.account_id, a.name, t.date, t.type, t.category, t.amount, t.memo
+	query := `SELECT t.id, t.account_id, a.name, t.date, t.type, t.category, t.amount, t.memo,
+			COALESCE(t.hobby_item_id,0)
 		FROM transactions t JOIN accounts a ON a.id = t.account_id
 		WHERE t.date >= ? AND t.date < ?`
 	args := []any{monthStart, monthEnd}
@@ -224,7 +225,7 @@ func monthTransactions(month string, accountID int64) ([]Transaction, error) {
 	for rows.Next() {
 		var tx Transaction
 		var memo sql.NullString
-		if err := rows.Scan(&tx.ID, &tx.AccountID, &tx.AccountName, &tx.Date, &tx.Type, &tx.Category, &tx.Amount, &memo); err != nil {
+		if err := rows.Scan(&tx.ID, &tx.AccountID, &tx.AccountName, &tx.Date, &tx.Type, &tx.Category, &tx.Amount, &memo, &tx.HobbyItemID); err != nil {
 			continue
 		}
 		tx.Memo = memo.String

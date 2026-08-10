@@ -6,6 +6,7 @@
 </head>
 <body class="page-search">
 <div class="wrap">
+  <div data-live="search">
 
   <header class="topbar single">
     <h1>검색</h1>
@@ -54,6 +55,12 @@
         <span class="tx-date">{{.Date}} · {{.AccountName}}</span>
       </div>
       <span class="tx-amount">{{if eq .Type "expense"}}-{{else}}+{{end}}{{comma .Amount}}</span>
+      <div class="tx-actions">
+        <button type="button" title="수정" onclick="openEditModal(this)"
+          data-id="{{.ID}}" data-date="{{.Date}}" data-type="{{.Type}}" data-category="{{.Category}}"
+          data-amount="{{.Amount}}" data-memo="{{.Memo}}" data-account-id="{{.AccountID}}"
+          data-hobby-item-id="{{.HobbyItemID}}">✎</button>
+      </div>
       <form method="post" action="/delete/{{.ID}}?redirect=/search" class="tx-del">
         <button type="submit" title="삭제">×</button>
       </form>
@@ -63,7 +70,9 @@
     {{end}}
   </section>
 
+  </div>
 </div>
+{{template "edit-modal" .}}
 {{template "nav" .}}
 {{template "scripts" .}}
 </body>
