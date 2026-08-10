@@ -32,8 +32,11 @@
           <noscript><button type="submit">저장</button></noscript>
         </form>
         <span class="tt-today-title {{if $t.Done}}done{{end}}">{{$t.Title}}</span>
+        {{if $t.Category}}<span class="tt-cat-tag">{{$t.Category}}</span>{{end}}
+        {{if $t.HasDeadline}}<span class="tt-dday-badge {{$t.DdayClass}}">{{$t.DdayLabel}}</span>{{end}}
         <button type="button" class="tt-edit-btn" title="수정" onclick="openTaskModal(this)"
           data-id="{{$t.ID}}" data-title="{{$t.Title}}" data-note="{{$t.Note}}" data-color="{{$t.Color}}"
+          data-category="{{$t.Category}}" data-deadline="{{$t.Deadline}}"
           {{if $t.Scheduled}}data-start="{{$t.StartHHMM}}" data-end="{{$t.EndHHMM}}"{{end}}
           data-today="1" data-date="{{$.Date}}">✎</button>
         <form method="post" action="/timetable/today/unset/{{$t.ID}}" class="tx-del">
@@ -59,8 +62,11 @@
       {{range .Backlog}}
       <div class="tt-dump-item" draggable="true" data-id="{{.ID}}" data-title="{{.Title}}">
         <span class="tt-dump-title">{{.Title}}</span>
+        {{if .Category}}<span class="tt-cat-tag">{{.Category}}</span>{{end}}
+        {{if .HasDeadline}}<span class="tt-dday-badge {{.DdayClass}}">{{.DdayLabel}}</span>{{end}}
         <button type="button" class="tt-edit-btn" title="수정" onclick="openTaskModal(this)"
           data-id="{{.ID}}" data-title="{{.Title}}" data-note="{{.Note}}" data-color="{{.Color}}"
+          data-category="{{.Category}}" data-deadline="{{.Deadline}}"
           data-date="{{$.Date}}">✎</button>
         <form method="post" action="/timetable/dump/delete/{{.ID}}" class="tx-del">
           <input type="hidden" name="date" value="{{$.Date}}">
@@ -84,10 +90,11 @@
           {{range .DawnBlocks}}
           <div class="tt-block tt-c{{.Color}}" data-id="{{.ID}}"
             data-title="{{.Title}}" data-note="{{.Note}}" data-color="{{.Color}}"
+            data-category="{{.Category}}" data-deadline="{{.Deadline}}"
             data-start="{{.StartHHMM}}" data-end="{{.EndHHMM}}"
             {{if gt .TodayOrder 0}}data-today="1"{{end}} data-date="{{$.Date}}"
             style="top:{{.TopPx}}px;height:{{.HeightPx}}px" onclick="openTaskModal(this)">
-            <div class="tt-block-title">{{.Title}}</div>
+            <div class="tt-block-title">{{.Title}}{{if .Category}} <span class="tt-cat-tag">{{.Category}}</span>{{end}}{{if .HasDeadline}} <span class="tt-dday-badge {{.DdayClass}}">{{.DdayLabel}}</span>{{end}}</div>
             <div class="tt-block-time">{{.StartHHMM}} - {{.EndHHMM}} ({{.Duration}})</div>
             <div class="resize-handle"></div>
           </div>
@@ -138,6 +145,10 @@
     </div>
     <div class="row tt-duration" id="task-duration"></div>
     <div class="row">
+      <input type="text" name="category" id="task-category" placeholder="카테고리 (선택)" maxlength="20">
+      <label class="tt-time-field">마감(선택)<input type="date" name="deadline" id="task-deadline"></label>
+    </div>
+    <div class="row">
       <label class="checkbox-label"><input type="checkbox" name="today" id="task-today"> 오늘의 계획에 추가</label>
     </div>
     <div class="row">
@@ -166,6 +177,8 @@ function openTaskModal(btn) {
   document.getElementById('task-note').value = d.note || '';
   document.getElementById('task-start').value = d.start || '';
   document.getElementById('task-end').value = d.end || '';
+  document.getElementById('task-category').value = d.category || '';
+  document.getElementById('task-deadline').value = d.deadline || '';
   document.getElementById('task-today').checked = d.today === '1';
   updateTaskDuration();
   modal.showModal();

@@ -835,6 +835,30 @@ html.nav-busy::before {
 }
 .tt-dump-item[draggable] { cursor: grab; }
 .tt-dump-item.dragging { opacity: 0.4; }
+.tt-cat-tag {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 7px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.tt-dday-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-radius: 999px;
+  padding: 1px 7px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.tt-dday-badge.tt-dday-today { color: #fbbf24; background: #fbbf2422; }
+.tt-dday-badge.tt-dday-over { color: #fb7185; background: #fb718522; }
+.tt-block-title .tt-cat-tag, .tt-block-title .tt-dday-badge { font-size: 9.5px; padding: 0 5px; }
 .tt-today-num { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
 .tt-check-form { flex: 0 0 auto; display: flex; }
 .tt-check-form input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); }
