@@ -150,16 +150,22 @@
         <input type="hidden" name="account_id" value="{{if .AccountID}}{{.AccountID}}{{else}}{{if .Accounts}}{{(index .Accounts 0).ID}}{{end}}{{end}}" id="add-account-id">
         <div class="row">
           <input type="date" name="date" required value="{{.Month}}-01">
-          <select name="type" class="type-select" onchange="updateCategoryOptions(this)">
+          <select name="type" class="type-select" onchange="updateCategoryOptions(this); toggleHobbyRow()">
             <option value="expense">지출</option>
             <option value="income">수입</option>
           </select>
         </div>
         <div class="row">
-          <select name="category" class="category-select">
+          <select name="category" class="category-select" onchange="toggleHobbyRow()">
             {{range .ExpenseCats}}<option value="{{.}}">{{icon .}} {{.}}</option>{{end}}
           </select>
           <input type="number" name="amount" id="add-amount" placeholder="금액" min="1" required>
+        </div>
+        <div class="row" id="hobby-row" hidden>
+          <select name="hobby_item_id" id="add-hobby-item">
+            <option value="0">🎮 여가 · 미분류</option>
+            {{range .HobbyItems}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+          </select>
         </div>
         <div class="row">
           <input type="text" name="memo" id="add-memo" placeholder="메모 (선택)">
@@ -233,6 +239,18 @@ function updateCategoryOptions(sel) {
     catSel.appendChild(opt);
   });
 }
+// The 여가 sub-item picker is only meaningful for 여가 expenses.
+function toggleHobbyRow() {
+  const row = document.getElementById('hobby-row');
+  if (!row) return;
+  const form = row.closest('form');
+  const isExpense = form.querySelector('.type-select').value === 'expense';
+  const isHobby = form.querySelector('.category-select').value === '여가';
+  row.hidden = !(isExpense && isHobby);
+}
+toggleHobbyRow();
+document.addEventListener('live:swap', toggleHobbyRow);
+
 function applyFav(btn) {
   const form = btn.closest('.add-panel').querySelector('form');
   const typeSel = form.querySelector('.type-select');
@@ -242,6 +260,7 @@ function applyFav(btn) {
   document.getElementById('add-amount').value = btn.dataset.amount;
   document.getElementById('add-memo').value = btn.dataset.memo;
   document.getElementById('add-account-id').value = btn.dataset.account;
+  toggleHobbyRow();
 }
 </script>
 {{template "nav" .}}

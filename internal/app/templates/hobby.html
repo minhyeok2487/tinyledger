@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ko">
+<head>
+{{template "head" .}}
+<title>가계부 · 여가</title>
+</head>
+<body class="page-hobby">
+<div class="wrap">
+  <div data-live="hobby">
+
+  <header class="topbar">
+    {{if eq .Scope "month"}}
+    <a class="nav-arrow" href="/hobby?scope=month&month={{.PrevMonth}}">‹</a>
+    <h1>{{.Month}}{{if .IsCurrent}}<span class="tag">이번 달</span>{{end}}</h1>
+    <a class="nav-arrow" href="/hobby?scope=month&month={{.NextMonth}}">›</a>
+    {{else}}
+    <h1>전체 기간</h1>
+    {{end}}
+  </header>
+
+  <div class="account-pills">
+    <a href="/hobby?scope=month&month={{.Month}}" class="pill {{if eq .Scope "month"}}active{{end}}">이번 달</a>
+    <a href="/hobby?scope=all" class="pill {{if eq .Scope "all"}}active{{end}}">전체</a>
+  </div>
+
+  <section class="summary hobby-summary">
+    <div class="card expense">
+      <div class="label">🎮 여가 지출</div>
+      <div class="amount">{{comma .Total}}</div>
+    </div>
+  </section>
+
+  {{if .Groups}}
+  <section class="panel cats-panel">
+    <div class="panel-title">항목별</div>
+    {{range .Groups}}
+    <div class="cat-row">
+      <span class="cat-icon">{{if eq .ItemID 0}}❔{{else}}🎮{{end}}</span>
+      <div class="cat-mid">
+        <div class="cat-top">
+          <span class="cat-name">{{.Name}}{{if .Archived}} <span class="rb-excl-tag">보관</span>{{end}}</span>
+          <span class="cat-amount">{{comma .Total}}</span>
+        </div>
+        <div class="cat-bar-bg">
+          <div class="cat-bar" style="width:{{.Percent}}%"></div>
+        </div>
+      </div>
+    </div>
+    {{end}}
+  </section>
+  {{end}}
+
+  {{range .Groups}}
+  {{$g := .}}
+  <section class="panel hobby-group">
+    <div class="panel-title">{{.Name}} · {{comma .Total}}</div>
+    <div class="tx-list">
+      {{range .Txs}}
+      <div class="tx expense">
+        <div class="tx-mid">
+          <span class="tx-cat">{{if .Memo}}{{.Memo}}{{else}}(메모 없음){{end}}</span>
+          <span class="tx-date">{{.Date}}</span>
+        </div>
+        <span class="tx-amount">-{{comma .Amount}}</span>
+        <form method="post" action="/hobby/assign/{{.ID}}" class="hobby-assign">
+          <input type="hidden" name="scope" value="{{$.Scope}}">
+          <input type="hidden" name="month" value="{{$.Month}}">
+          <select name="item_id" onchange="this.form.requestSubmit()" aria-label="항목 지정">
+            <option value="0" {{if eq $g.ItemID 0}}selected{{end}}>미분류</option>
+            {{range $.Items}}<option value="{{.ID}}" {{if eq .ID $g.ItemID}}selected{{end}}>{{.Name}}</option>{{end}}
+            {{if and $g.Archived (ne $g.ItemID 0)}}<option value="{{$g.ItemID}}" selected>{{$g.Name}} (보관)</option>{{end}}
+          </select>
+          <noscript><button type="submit">지정</button></noscript>
+        </form>
+      </div>
+      {{end}}
+    </div>
+  </section>
+  {{else}}
+  <div class="empty">{{if eq .Scope "month"}}이번 달{{else}}전체 기간{{end}} 여가 지출이 없습니다.</div>
+  {{end}}
+
+  <section class="panel">
+    <div class="panel-title">항목 관리</div>
+    {{range .Items}}
+    <div class="tx hobby-item-row">
+      <form method="post" action="/hobby/items/rename/{{.ID}}" class="hobby-item-form">
+        <input type="hidden" name="scope" value="{{$.Scope}}">
+        <input type="hidden" name="month" value="{{$.Month}}">
+        <input type="text" name="name" value="{{.Name}}" required>
+        <button type="submit" class="acc-save" title="저장">저장</button>
+      </form>
+      <form method="post" action="/hobby/items/delete/{{.ID}}" class="tx-del" onsubmit="return confirm('{{.Name}} 항목을 삭제할까요? 이미 쓴 내역이 있으면 보관 처리됩니다.')">
+        <input type="hidden" name="scope" value="{{$.Scope}}">
+        <input type="hidden" name="month" value="{{$.Month}}">
+        <button type="submit" title="삭제">×</button>
+      </form>
+    </div>
+    {{end}}
+    <form method="post" action="/hobby/items/add">
+      <input type="hidden" name="scope" value="{{.Scope}}">
+      <input type="hidden" name="month" value="{{.Month}}">
+      <div class="row">
+        <input type="text" name="name" placeholder="항목 이름 (예: 명조, 프라모델)" required>
+        <button type="submit" class="btn-primary">추가</button>
+      </div>
+    </form>
+  </section>
+
+  </div>
+</div>
+{{template "nav" .}}
+{{template "scripts" .}}
+</body>
+</html>

@@ -41,22 +41,23 @@ func buildDashboard(month string, accountID int64) (DashboardData, error) {
 	prev := shiftMonth(month, -1)
 	next := shiftMonth(month, 1)
 
-	// These six reads are independent of each other, and against a remote
+	// These reads are independent of each other, and against a remote
 	// Turso database each one is a full network round trip. Run them
 	// concurrently: every goroutine writes to its own variable, and nothing
 	// is read until wg.Wait() returns, so no locking is needed.
 	var (
-		wg       sync.WaitGroup
-		errs     [5]error
-		budgets  map[string]int64
-		txs      []Transaction
-		accounts []Account
-		allTpl   []Template
-		spent    map[string]bool
-		note     string
+		wg         sync.WaitGroup
+		errs       [6]error
+		budgets    map[string]int64
+		txs        []Transaction
+		accounts   []Account
+		allTpl     []Template
+		spent      map[string]bool
+		hobbyItems []HobbyItem
+		note       string
 	)
 
-	wg.Add(6)
+	wg.Add(7)
 	go func() {
 		defer wg.Done()
 		budgets, errs[0] = monthBudgets(month)
@@ -76,6 +77,10 @@ func buildDashboard(month string, accountID int64) (DashboardData, error) {
 	go func() {
 		defer wg.Done()
 		spent, errs[4] = spentTemplateKeys(month)
+	}()
+	go func() {
+		defer wg.Done()
+		hobbyItems, errs[5] = listHobbyItems(false)
 	}()
 	go func() {
 		defer wg.Done()
@@ -136,14 +141,9 @@ func buildDashboard(month string, accountID int64) (DashboardData, error) {
 		}
 	}
 
-	var totalBalance, availableBalance, selectedBalance int64
-	included := 0
+	var totalBalance, selectedBalance int64
 	for _, a := range accounts {
 		totalBalance += a.Balance
-		if !a.Excluded {
-			included++
-			availableBalance += a.Balance
-		}
 		if a.ID == accountID {
 			selectedBalance = a.Balance
 		}
@@ -153,23 +153,9 @@ func buildDashboard(month string, accountID int64) (DashboardData, error) {
 		realBalance = selectedBalance
 	}
 
-	// Favorites still unspent this month are the fixed costs yet to go out,
-	// so what's actually free to spend is the non-excluded balance minus them.
+	// Favorites still unspent this month are the fixed costs yet to go out.
 	templates := filterUnspent(allTpl, spent)
-	excludedAcct := map[int64]bool{}
-	for _, a := range accounts {
-		if a.Excluded {
-			excludedAcct[a.ID] = true
-		}
-	}
-	var upcomingFixed int64
-	for _, t := range templates {
-		// A fixed cost paid from an excluded account was never part of
-		// availableBalance, so subtracting it would double-count.
-		if t.Type == "expense" && !excludedAcct[t.AccountID] {
-			upcomingFixed += t.Amount
-		}
-	}
+	spendable := computeSpendable(accounts, templates)
 
 	return DashboardData{
 		Month:        month,
@@ -187,12 +173,13 @@ func buildDashboard(month string, accountID int64) (DashboardData, error) {
 		Templates:    templates,
 		ExpenseCats:  expenseCategories,
 		IncomeCats:   incomeCategories,
+		HobbyItems:   hobbyItems,
 		Note:         note,
 
-		AvailableBalance: availableBalance,
-		UpcomingFixed:    upcomingFixed,
-		Spendable:        availableBalance - upcomingFixed,
-		AllExcluded:      len(accounts) > 0 && included == 0,
+		AvailableBalance: spendable.Available,
+		UpcomingFixed:    spendable.UpcomingFixed,
+		Spendable:        spendable.Spendable,
+		AllExcluded:      spendable.AllExcluded,
 	}, nil
 }
 

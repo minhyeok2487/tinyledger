@@ -64,6 +64,7 @@ type DashboardData struct {
 	Templates        []Template
 	ExpenseCats      []string
 	IncomeCats       []string
+	HobbyItems       []HobbyItem
 	Nav              string
 	Note             string
 }
@@ -120,4 +121,57 @@ type AccountsData struct {
 type LoginData struct {
 	Next  string
 	Error string
+}
+
+// HobbyItem is a sub-bucket of the 여가 category (명조, 프라모델, …), chosen
+// when a transaction is entered. Archived items keep showing in totals but
+// disappear from the entry select.
+type HobbyItem struct {
+	ID       int64
+	Name     string
+	Archived bool
+}
+
+type HobbyGroup struct {
+	ItemID   int64 // 0 = 미분류
+	Name     string
+	Archived bool
+	Total    int64
+	Percent  float64
+	Txs      []Transaction
+}
+
+type HobbyData struct {
+	Scope     string // "month" | "all"
+	Month     string
+	PrevMonth string
+	NextMonth string
+	IsCurrent bool
+	Groups    []HobbyGroup
+	Items     []HobbyItem
+	Total     int64
+	Nav       string
+}
+
+type WishItem struct {
+	ID       int64
+	Name     string
+	Price    int64
+	URL      string
+	Memo     string
+	BoughtAt string // "" = 아직 안 삼
+	// Affordable and Short are derived from the current 쓸 수 있는 돈.
+	Affordable bool
+	Short      int64
+}
+
+type WishlistData struct {
+	Items       []WishItem
+	Bought      []WishItem
+	Spendable   SpendableInfo
+	Accounts    []Account
+	HobbyItems  []HobbyItem
+	ExpenseCats []string
+	Today       string
+	Nav         string
 }
