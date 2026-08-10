@@ -620,6 +620,16 @@ button:active { transform: scale(0.97); }
   .wrap { max-width: 700px; margin: 0 auto; padding: 40px 32px 60px; }
 
   .page-dashboard .wrap { max-width: 960px; }
+
+  .page-timetable .wrap { max-width: 1200px; }
+  .tt-layout {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    align-items: start;
+    gap: 20px;
+  }
+  .tt-col-left .tt-today-list, .tt-col-left .tt-dump-list { grid-template-columns: 1fr; }
+
   .dash-grid {
     grid-template-columns: 1fr 340px;
     grid-template-areas:

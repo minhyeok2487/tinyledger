@@ -19,6 +19,9 @@
   </div>
   {{end}}
 
+  <div class="tt-layout">
+  <div class="tt-col-left">
+
   <section class="panel tt-today">
     <div class="panel-title">오늘의 계획 {{len .Planned}}/5</div>
     {{if .Planned}}
@@ -79,6 +82,9 @@
     </div>
   </section>
 
+  </div>
+  <div class="tt-col-right">
+
   <section class="panel tt-grid-panel">
     <div class="panel-title">시간표 {{.TotalBlocks}} blocks</div>
 
@@ -109,10 +115,11 @@
         {{range .MainBlocks}}
         <div class="tt-block tt-c{{.Color}}" data-id="{{.ID}}"
           data-title="{{.Title}}" data-note="{{.Note}}" data-color="{{.Color}}"
+          data-category="{{.Category}}" data-deadline="{{.Deadline}}"
           data-start="{{.StartHHMM}}" data-end="{{.EndHHMM}}"
           {{if gt .TodayOrder 0}}data-today="1"{{end}} data-date="{{$.Date}}"
           style="top:{{.MainTopPx}}px;height:{{.HeightPx}}px" onclick="openTaskModal(this)">
-          <div class="tt-block-title">{{.Title}}</div>
+          <div class="tt-block-title">{{.Title}}{{if .Category}} <span class="tt-cat-tag">{{.Category}}</span>{{end}}{{if .HasDeadline}} <span class="tt-dday-badge {{.DdayClass}}">{{.DdayLabel}}</span>{{end}}</div>
           <div class="tt-block-time">{{.StartHHMM}} - {{.EndHHMM}} ({{.Duration}})</div>
           <div class="resize-handle"></div>
         </div>
@@ -121,6 +128,9 @@
       <div class="now-line" id="now-line" hidden><span class="now-label"></span></div>
     </div>
   </section>
+
+  </div>
+  </div>
 
   </div>
 </div>
