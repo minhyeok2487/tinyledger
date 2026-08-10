@@ -142,3 +142,25 @@ func isExpenseCategory(c string) bool {
 	}
 	return false
 }
+
+func isIncomeCategory(c string) bool {
+	for _, e := range incomeCategories {
+		if e == c {
+			return true
+		}
+	}
+	return false
+}
+
+// isValidCategory checks a category against the list for the given type.
+// The edit modal rebuilds its <select> client-side before setting the value;
+// a category that has fallen out of the known list (e.g. a stray API call,
+// or a future category rename) would leave the select unselected and submit
+// an empty string, silently blanking the transaction's category if the
+// server didn't also check.
+func isValidCategory(typ, category string) bool {
+	if typ == "income" {
+		return isIncomeCategory(category)
+	}
+	return isExpenseCategory(category)
+}
