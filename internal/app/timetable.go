@@ -80,11 +80,15 @@ func handleTimetable(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// listTasks returns the given date's planned/scheduled tasks plus every
+// Brain Dump item — Brain Dump items carry date = "" (see revertToBacklogIfUnplanned)
+// so they show up regardless of which day is being viewed, instead of being
+// stuck on whichever day they happened to be added from.
 func listTasks(date string) ([]Task, error) {
 	rows, err := db.Query(`SELECT id, title, note, date,
 			COALESCE(today_order,0), COALESCE(start_min,-1), COALESCE(end_min,-1),
 			color, done, sort_order, category, deadline
-		FROM tasks WHERE date = ? ORDER BY sort_order, id`, date)
+		FROM tasks WHERE date = ? OR date = '' ORDER BY sort_order, id`, date)
 	if err != nil {
 		log.Println(err)
 		return nil, err
@@ -114,18 +118,19 @@ func timetableRedirect(r *http.Request) string {
 	return "/timetable?" + v.Encode()
 }
 
+// handleDumpAdd always inserts with date = "" — Brain Dump is a single
+// global list, not scoped to whichever day happens to be on screen.
 func handleDumpAdd(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), 400)
 		return
 	}
-	date := normalizeDate(r.FormValue("date"))
 	if title := r.FormValue("title"); title != "" {
 		var count int
-		db.QueryRow(`SELECT COUNT(*) FROM tasks WHERE date = ?`, date).Scan(&count)
+		db.QueryRow(`SELECT COUNT(*) FROM tasks WHERE date = ''`).Scan(&count)
 		db.Exec(`INSERT INTO tasks(title, date, color, sort_order)
-			VALUES (?, ?, ?, (SELECT COALESCE(MAX(sort_order),-1)+1 FROM tasks WHERE date = ?))`,
-			title, date, count%taskColors, date)
+			VALUES (?, '', ?, (SELECT COALESCE(MAX(sort_order),-1)+1 FROM tasks WHERE date = ''))`,
+			title, count%taskColors)
 	}
 	http.Redirect(w, r, timetableRedirect(r), http.StatusSeeOther)
 }
@@ -162,12 +167,17 @@ func handleTodayUnset(w http.ResponseWriter, r *http.Request) {
 // today/unset routes (reached by drag) and by handleTaskEdit's "오늘의
 // 계획에 추가" checkbox (the drag-free path, needed since native HTML5
 // drag-and-drop doesn't work on touch browsers).
+// setTodayOrder also pins date to the viewed day — a Brain Dump item (date
+// = "") stops being global the moment it's planned, since 오늘의 계획 is
+// inherently day-specific. Matches date = ? OR date = ” so it still finds
+// the row whichever state it's currently in.
 func setTodayOrder(id, date string) {
-	res, err := db.Exec(`UPDATE tasks SET today_order =
-			(SELECT COUNT(*) FROM tasks WHERE date = ? AND today_order IS NOT NULL) + 1
-		WHERE id = ? AND date = ? AND today_order IS NULL
+	res, err := db.Exec(`UPDATE tasks SET
+			today_order = (SELECT COUNT(*) FROM tasks WHERE date = ? AND today_order IS NOT NULL) + 1,
+			date = ?
+		WHERE id = ? AND (date = ? OR date = '') AND today_order IS NULL
 			AND (SELECT COUNT(*) FROM tasks WHERE date = ? AND today_order IS NOT NULL) < ?`,
-		date, id, date, date, maxTodaySlots)
+		date, date, id, date, date, maxTodaySlots)
 	if err != nil {
 		return
 	}
@@ -237,6 +247,15 @@ func unsetTodayOrder(id, date string) {
 	} else {
 		tx.Rollback()
 	}
+	revertToBacklogIfUnplanned(id)
+}
+
+// revertToBacklogIfUnplanned clears a task's date back to "" (global Brain
+// Dump) once it has neither a 오늘의 계획 slot nor a schedule — otherwise a
+// task pulled out of 오늘의 계획 or unscheduled would stay stuck on whichever
+// day it happened to be viewed from, instead of returning to Brain Dump.
+func revertToBacklogIfUnplanned(id string) {
+	db.Exec(`UPDATE tasks SET date = '' WHERE id = ? AND today_order IS NULL AND start_min IS NULL`, id)
 }
 
 func handleTodayToggle(w http.ResponseWriter, r *http.Request) {
@@ -264,7 +283,10 @@ func handleSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 	start, end = clampSchedule(start, end)
 
-	db.Exec(`UPDATE tasks SET start_min = ?, end_min = ? WHERE id = ?`, start, end, r.PathValue("id"))
+	// Also pins date to the viewed day — a Brain Dump item scheduled directly
+	// onto the grid (skipping 오늘의 계획) must stop being global too.
+	date := normalizeDate(r.FormValue("date"))
+	db.Exec(`UPDATE tasks SET start_min = ?, end_min = ?, date = ? WHERE id = ?`, start, end, date, r.PathValue("id"))
 	http.Redirect(w, r, timetableRedirect(r), http.StatusSeeOther)
 }
 
@@ -294,7 +316,9 @@ func handleUnschedule(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 400)
 		return
 	}
-	db.Exec(`UPDATE tasks SET start_min = NULL, end_min = NULL WHERE id = ?`, r.PathValue("id"))
+	id := r.PathValue("id")
+	db.Exec(`UPDATE tasks SET start_min = NULL, end_min = NULL WHERE id = ?`, id)
+	revertToBacklogIfUnplanned(id)
 	http.Redirect(w, r, timetableRedirect(r), http.StatusSeeOther)
 }
 
@@ -344,8 +368,11 @@ func handleTaskEdit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		startMin, endMin := clampSchedule(start.Hour()*60+start.Minute(), end.Hour()*60+end.Minute())
-		db.Exec(`UPDATE tasks SET title = ?, note = ?, color = ?, category = ?, deadline = ?, start_min = ?, end_min = ? WHERE id = ?`,
-			title, note, color, category, deadline, startMin, endMin, id)
+		// Setting a concrete time slot pins date too — a Brain Dump item
+		// scheduled straight from the modal must stop being global, same as
+		// dragging it onto the grid does in handleSchedule.
+		db.Exec(`UPDATE tasks SET title = ?, note = ?, color = ?, category = ?, deadline = ?, start_min = ?, end_min = ?, date = ? WHERE id = ?`,
+			title, note, color, category, deadline, startMin, endMin, date, id)
 	}
 
 	// "오늘의 계획에 추가" checkbox — the modal's non-drag path to the same
