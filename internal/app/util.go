@@ -191,6 +191,19 @@ func shiftMonth(month string, delta int) string {
 	return t.AddDate(0, delta, 0).Format("2006-01")
 }
 
+// categoryColorIndex derives a stable palette slot (0..taskColors-1) from a
+// category name via a simple hash, so every task sharing a category always
+// renders in the same tt-cN color on the schedule grid — without needing a
+// color column on task_categories for the user to manage.
+func categoryColorIndex(name string) int {
+	var h uint32 = 2166136261
+	for i := 0; i < len(name); i++ {
+		h ^= uint32(name[i])
+		h *= 16777619
+	}
+	return int(h % taskColors)
+}
+
 // daysUntil returns the whole-day gap between today and a "2006-01-02"
 // deadline: positive when it's still ahead, 0 when due today, negative once
 // overdue. ok is false for an unparsable deadline.

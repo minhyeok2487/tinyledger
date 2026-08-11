@@ -197,7 +197,18 @@ type Task struct {
 	Deadline   string // "2006-01-02", "" = no deadline (optional)
 }
 
-func (t Task) Scheduled() bool   { return t.StartMin >= 0 }
+func (t Task) Scheduled() bool { return t.StartMin >= 0 }
+
+// ColorClass is what the schedule grid actually renders with: tasks sharing
+// a category always get the same color, so the grid reads at a glance —
+// falling back to the task's own stored Color (assigned round-robin at
+// creation) only when there's no category to key off of.
+func (t Task) ColorClass() int {
+	if t.Category != "" {
+		return categoryColorIndex(t.Category)
+	}
+	return t.Color
+}
 func (t Task) HasDeadline() bool { return t.Deadline != "" }
 
 // DdayLabel renders the task's deadline as a D-day badge ("D-3", "D-DAY",

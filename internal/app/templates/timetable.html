@@ -95,7 +95,7 @@
         {{range .DawnHours}}<div class="hour-row" data-hour="{{.}}"><span class="hour-label">{{printf "%02d" .}}</span></div>{{end}}
         <div class="tt-blocks-layer">
           {{range .DawnBlocks}}
-          <div class="tt-block tt-c{{.Color}}" data-id="{{.ID}}"
+          <div class="tt-block tt-c{{.ColorClass}}" data-id="{{.ID}}"
             data-title="{{.Title}}" data-note="{{.Note}}" data-color="{{.Color}}"
             data-category="{{.Category}}" data-deadline="{{.Deadline}}"
             data-start="{{.StartHHMM}}" data-end="{{.EndHHMM}}"
@@ -103,6 +103,7 @@
             style="top:{{.TopPx}}px;height:{{.HeightPx}}px" onclick="openTaskModal(this)">
             <div class="tt-block-title">{{.Title}}{{if .Category}} <span class="tt-cat-tag">{{.Category}}</span>{{end}}{{if .HasDeadline}} <span class="tt-dday-badge {{.DdayClass}}">{{.DdayLabel}}</span>{{end}}</div>
             <div class="tt-block-time">{{.StartHHMM}} - {{.EndHHMM}} ({{.Duration}})</div>
+            {{if .Note}}<div class="tt-block-note">{{notePreview .Note}}</div>{{end}}
             <div class="resize-handle"></div>
           </div>
           {{end}}
@@ -114,7 +115,7 @@
       {{range .DayHours}}<div class="hour-row" data-hour="{{.}}"><span class="hour-label">{{printf "%02d" .}}</span></div>{{end}}
       <div class="tt-blocks-layer" id="blocks-layer">
         {{range .MainBlocks}}
-        <div class="tt-block tt-c{{.Color}}" data-id="{{.ID}}"
+        <div class="tt-block tt-c{{.ColorClass}}" data-id="{{.ID}}"
           data-title="{{.Title}}" data-note="{{.Note}}" data-color="{{.Color}}"
           data-category="{{.Category}}" data-deadline="{{.Deadline}}"
           data-start="{{.StartHHMM}}" data-end="{{.EndHHMM}}"
@@ -122,6 +123,7 @@
           style="top:{{.MainTopPx}}px;height:{{.HeightPx}}px" onclick="openTaskModal(this)">
           <div class="tt-block-title">{{.Title}}{{if .Category}} <span class="tt-cat-tag">{{.Category}}</span>{{end}}{{if .HasDeadline}} <span class="tt-dday-badge {{.DdayClass}}">{{.DdayLabel}}</span>{{end}}</div>
           <div class="tt-block-time">{{.StartHHMM}} - {{.EndHHMM}} ({{.Duration}})</div>
+          {{if .Note}}<div class="tt-block-note">{{notePreview .Note}}</div>{{end}}
           <div class="resize-handle"></div>
         </div>
         {{end}}
@@ -348,14 +350,17 @@ function fmtMins(mins) {
     const item = e.target.closest('.tt-dump-item[draggable]');
     if (item) item.classList.remove('dragging');
   });
+  // Matches the whole 오늘의 계획 panel, not just #today-list — that element
+  // only wraps the existing rows, so once it's populated it's shorter than
+  // the panel and leaves dead space below where a drop would silently miss.
   document.addEventListener('dragover', function (e) {
-    if (e.target.closest('#today-list') || e.target.closest('.tt-grid')) e.preventDefault();
+    if (e.target.closest('.tt-today') || e.target.closest('.tt-grid')) e.preventDefault();
   });
   document.addEventListener('drop', function (e) {
     const id = e.dataTransfer.getData('text/plain');
     if (!id) return;
 
-    const todayList = e.target.closest('#today-list');
+    const todayList = e.target.closest('.tt-today');
     if (todayList) {
       e.preventDefault();
       postLive('/timetable/today/set/' + id, { date: TT_DATE });
