@@ -650,7 +650,7 @@ button:active { transform: scale(0.97); }
 
   .page-dashboard .wrap { max-width: 960px; }
 
-  .page-timetable .wrap { max-width: 1200px; }
+  .page-timetable .wrap { max-width: none; }
   .tt-layout {
     display: grid;
     grid-template-columns: 360px 1fr;
@@ -997,6 +997,16 @@ button.btn-danger:hover { background: var(--expense); color: #0b0d12; }
 }
 .tt-block-title { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tt-block-time { font-size: 10.5px; opacity: 0.8; }
+.tt-block-note {
+  font-size: 10.5px;
+  opacity: 0.75;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
 .resize-handle {
   position: absolute;
   bottom: 2px;
